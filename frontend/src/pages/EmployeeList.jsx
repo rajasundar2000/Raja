@@ -211,61 +211,97 @@ export default function EmployeeList() {
             <p className="text-sm">No employees found</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50 text-xs text-gray-500 uppercase tracking-wider">
-                <tr>
-                  <th className="px-5 py-3 text-left">Emp ID</th>
-                  <th className="px-5 py-3 text-left">Name</th>
-                  <th className="px-5 py-3 text-left">Department</th>
-                  <th className="px-5 py-3 text-left">Designation</th>
-                  <th className="px-5 py-3 text-left">Role</th>
-                  <th className="px-5 py-3 text-left">Status</th>
-                  <th className="px-5 py-3 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {data.map((emp) => (
-                  <tr
-                    key={emp.id ?? emp.employee_id}
-                    className="hover:bg-indigo-50/30 cursor-pointer"
-                    onClick={() => navigate(`/employees/${emp.employee_id ?? emp.id}`)}
-                  >
-                    <td className="px-5 py-3 font-mono text-xs text-indigo-600 font-semibold">
-                      {emp.employee_id}
-                    </td>
-                    <td className="px-5 py-3 font-medium text-gray-900">
-                      {emp.first_name} {emp.last_name}
-                    </td>
-                    <td className="px-5 py-3 text-gray-600">
-                      <div className="flex items-center gap-1.5">
+          <>
+            {/* Desktop table */}
+            <div className="hidden md:block overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50 text-xs text-gray-500 uppercase tracking-wider">
+                  <tr>
+                    <th className="px-5 py-3 text-left">Emp ID</th>
+                    <th className="px-5 py-3 text-left">Name</th>
+                    <th className="px-5 py-3 text-left">Department</th>
+                    <th className="px-5 py-3 text-left">Designation</th>
+                    <th className="px-5 py-3 text-left">Role</th>
+                    <th className="px-5 py-3 text-left">Status</th>
+                    <th className="px-5 py-3 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {data.map((emp) => (
+                    <tr
+                      key={emp.id ?? emp.employee_id}
+                      className="hover:bg-indigo-50/30 cursor-pointer"
+                      onClick={() => navigate(`/employees/${emp.employee_id ?? emp.id}`)}
+                    >
+                      <td className="px-5 py-3 font-mono text-xs text-indigo-600 font-semibold">
+                        {emp.employee_id}
+                      </td>
+                      <td className="px-5 py-3 font-medium text-gray-900">
+                        {emp.first_name} {emp.last_name}
+                      </td>
+                      <td className="px-5 py-3 text-gray-600">
+                        <div className="flex items-center gap-1.5">
+                          <Building2 className="h-3.5 w-3.5 text-gray-400" />
+                          {emp.department ?? '—'}
+                        </div>
+                      </td>
+                      <td className="px-5 py-3 text-gray-600">{emp.designation ?? '—'}</td>
+                      <td className="px-5 py-3">
+                        <span className="text-xs text-gray-500 capitalize">{emp.role ?? '—'}</span>
+                      </td>
+                      <td className="px-5 py-3">
+                        <StatusBadge status={emp.status ?? 'active'} />
+                      </td>
+                      <td className="px-5 py-3 text-right">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            navigate(`/employees/${emp.employee_id ?? emp.id}`)
+                          }}
+                          className="text-indigo-600 hover:underline text-xs font-medium"
+                        >
+                          View Details
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile card list */}
+            <div className="md:hidden divide-y divide-gray-100">
+              {data.map((emp) => (
+                <div
+                  key={emp.id ?? emp.employee_id}
+                  className="p-4 hover:bg-gray-50 cursor-pointer"
+                  onClick={() => navigate(`/employees/${emp.employee_id ?? emp.id}`)}
+                >
+                  <div className="flex justify-between items-start">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-xs text-indigo-600 font-semibold">
+                          {emp.employee_id}
+                        </span>
+                        <StatusBadge status={emp.status ?? 'active'} />
+                      </div>
+                      <p className="font-semibold text-gray-900 mt-0.5">
+                        {emp.first_name} {emp.last_name}
+                      </p>
+                      <p className="text-sm text-gray-500">{emp.designation ?? '—'}</p>
+                    </div>
+                    <div className="ml-3 text-right flex-shrink-0">
+                      <div className="flex items-center gap-1 text-sm text-gray-600">
                         <Building2 className="h-3.5 w-3.5 text-gray-400" />
                         {emp.department ?? '—'}
                       </div>
-                    </td>
-                    <td className="px-5 py-3 text-gray-600">{emp.designation ?? '—'}</td>
-                    <td className="px-5 py-3">
-                      <span className="text-xs text-gray-500 capitalize">{emp.role ?? '—'}</span>
-                    </td>
-                    <td className="px-5 py-3">
-                      <StatusBadge status={emp.status ?? 'active'} />
-                    </td>
-                    <td className="px-5 py-3 text-right">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          navigate(`/employees/${emp.employee_id ?? emp.id}`)
-                        }}
-                        className="text-indigo-600 hover:underline text-xs font-medium"
-                      >
-                        View Details
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                      <p className="text-xs text-gray-400 capitalize mt-1">{emp.role ?? '—'}</p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
         )}
 
         {/* Pagination */}

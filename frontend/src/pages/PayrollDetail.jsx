@@ -316,6 +316,7 @@ function SalarySlipDetail({ slip, monthName, year }) {
     { label: 'Special Allowance', value: slip.special_allowance },
     { label: 'Leave Travel Allowance (LTA)', value: slip.lta },
     { label: 'Performance Bonus', value: slip.bonus ?? slip.performance_bonus },
+    { label: 'Commission', value: slip.commission_amount ?? slip.commission },
     { label: 'Overtime', value: slip.overtime },
     { label: 'Other Allowance', value: slip.other_allowance },
     { label: 'Arrears', value: slip.arrears },

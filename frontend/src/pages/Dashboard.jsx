@@ -11,17 +11,19 @@ import {
   CreditCard,
   AlertCircle,
 } from 'lucide-react'
-import { employees, leaves, payroll } from '../api.js'
+import { employees, leaves, payroll, commissionAPI } from '../api.js'
+import { useAuth } from '../context/AuthContext.jsx'
 import LoadingSpinner from '../components/LoadingSpinner.jsx'
 import StatusBadge from '../components/StatusBadge.jsx'
 import LeaveBalanceCard from '../components/LeaveBalanceCard.jsx'
+import { formatINR } from '../utils/format.js'
 import toast from 'react-hot-toast'
 
-const DEFAULT_EMP = 'E001'
-
-function formatINR(amount) {
-  if (amount == null) return '₹0'
-  return '₹' + Number(amount).toLocaleString('en-IN', { maximumFractionDigits: 0 })
+function getGreeting() {
+  const h = new Date().getHours()
+  if (h < 12) return 'Good morning'
+  if (h < 17) return 'Good afternoon'
+  return 'Good evening'
 }
 
 function StatCard({ icon: Icon, label, value, sub, color = 'indigo', loading }) {
@@ -30,6 +32,7 @@ function StatCard({ icon: Icon, label, value, sub, color = 'indigo', loading }) 
     green: 'bg-green-50 text-green-600',
     amber: 'bg-amber-50 text-amber-600',
     blue: 'bg-blue-50 text-blue-600',
+    purple: 'bg-purple-50 text-purple-600',
   }
   return (
     <div className="bg-white rounded-lg border border-gray-200 p-5 shadow-sm">
@@ -51,6 +54,7 @@ function StatCard({ icon: Icon, label, value, sub, color = 'indigo', loading }) 
 
 export default function Dashboard() {
   const navigate = useNavigate()
+  const { user } = useAuth()
   const [loading, setLoading] = useState(true)
   const [empCount, setEmpCount] = useState(0)
   const [pendingLeaves, setPendingLeaves] = useState([])
@@ -58,20 +62,33 @@ export default function Dashboard() {
   const [recentLeaves, setRecentLeaves] = useState([])
   const [payrollCycles, setPayrollCycles] = useState([])
   const [loans, setLoans] = useState([])
+  const [commissionEntries, setCommissionEntries] = useState([])
+  const [commissionSummary, setCommissionSummary] = useState(null)
   const [error, setError] = useState(null)
+
+  const empId = user?.employee_id ?? 'E001'
+  const isManager = ['hr', 'super_admin', 'manager'].includes(user?.role)
+  const now = new Date()
+  const curMonth = now.getMonth() + 1
+  const curYear = now.getFullYear()
 
   useEffect(() => {
     async function fetchAll() {
       setLoading(true)
       setError(null)
       try {
-        const [empRes, leaveReqRes, balRes, cycleRes, loanRes] = await Promise.allSettled([
-          employees.getAll({ page: 1, page_size: 1 }),
+        const calls = [
+          ...(isManager ? [employees.getAll({ page: 1, page_size: 1 })] : [Promise.resolve({ data: {} })]),
           leaves.getRequests({ status: 'submitted', page_size: 5 }),
-          leaves.getBalance(DEFAULT_EMP),
+          leaves.getBalance(empId),
           payroll.getCycles({ page_size: 5 }),
           payroll.getLoans({ page_size: 100 }),
-        ])
+          commissionAPI.getEntries({ employee_id: empId, month: curMonth, year: curYear }),
+          commissionAPI.getEmployeeSummary(empId, curMonth, curYear),
+        ]
+
+        const [empRes, leaveReqRes, balRes, cycleRes, loanRes, commRes, commSumRes] =
+          await Promise.allSettled(calls)
 
         if (empRes.status === 'fulfilled') {
           const d = empRes.value.data
@@ -98,7 +115,14 @@ export default function Dashboard() {
           const list = d.results ?? d.data ?? (Array.isArray(d) ? d : [])
           setLoans(list.filter((l) => l.status === 'active'))
         }
-      } catch (err) {
+        if (commRes.status === 'fulfilled') {
+          const d = commRes.value.data
+          setCommissionEntries(d.results ?? d.data ?? (Array.isArray(d) ? d : []))
+        }
+        if (commSumRes.status === 'fulfilled') {
+          setCommissionSummary(commSumRes.value.data)
+        }
+      } catch {
         setError('Failed to load dashboard data. Backend may not be running.')
         toast.error('Could not connect to backend API')
       } finally {
@@ -106,16 +130,26 @@ export default function Dashboard() {
       }
     }
     fetchAll()
-  }, [])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [empId])
 
   const latestCycle = payrollCycles[0]
   const totalPayroll = latestCycle?.total_net_pay ?? latestCycle?.total_amount ?? 0
 
+  const thisMonthCommission = commissionSummary?.total ??
+    commissionEntries
+      .filter((e) => e.status === 'approved')
+      .reduce((s, e) => s + parseFloat(e.commission_amount ?? 0), 0)
+
+  const firstName = user?.full_name?.split(' ')[0] ?? 'there'
+
   return (
     <div className="space-y-6">
-      {/* Page title */}
+      {/* Greeting */}
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
+        <h1 className="text-2xl font-bold text-gray-900">
+          {getGreeting()}, {firstName}! 👋
+        </h1>
         <p className="text-sm text-gray-500 mt-0.5">
           Indian Leave Management & Payroll — FY 2025–26
         </p>
@@ -130,32 +164,44 @@ export default function Dashboard() {
       )}
 
       {/* Stat cards */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard
-          icon={Users}
-          label="Total Employees"
-          value={empCount}
-          color="indigo"
-          loading={loading}
-        />
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-5">
+        {isManager && (
+          <StatCard
+            icon={Users}
+            label="Total Employees"
+            value={empCount}
+            color="indigo"
+            loading={loading}
+          />
+        )}
         <StatCard
           icon={Calendar}
-          label="Pending Leave Requests"
+          label="Pending Leaves"
           value={pendingLeaves.length}
           sub="Awaiting approval"
           color="amber"
           loading={loading}
         />
+        {isManager && (
+          <StatCard
+            icon={DollarSign}
+            label="This Month Payroll"
+            value={formatINR(totalPayroll)}
+            sub={latestCycle ? `${latestCycle.month_name ?? ''} ${latestCycle.year ?? ''}` : 'No cycles yet'}
+            color="green"
+            loading={loading}
+          />
+        )}
         <StatCard
-          icon={DollarSign}
-          label="This Month Payroll"
-          value={formatINR(totalPayroll)}
-          sub={latestCycle ? `${latestCycle.month_name ?? ''} ${latestCycle.year ?? ''}` : 'No cycles yet'}
-          color="green"
+          icon={TrendingUp}
+          label="My Commission"
+          value={formatINR(thisMonthCommission)}
+          sub={`${new Date().toLocaleString('en-IN', { month: 'short' })} ${curYear}`}
+          color="purple"
           loading={loading}
         />
         <StatCard
-          icon={TrendingUp}
+          icon={CreditCard}
           label="Active Loans"
           value={loans.length}
           sub="Employee loans"
@@ -177,58 +223,85 @@ export default function Dashboard() {
               View all <ArrowRight className="h-4 w-4" />
             </button>
           </div>
-          <div className="overflow-x-auto">
-            {loading ? (
-              <div className="flex justify-center py-12">
-                <LoadingSpinner text="Loading leaves..." />
-              </div>
-            ) : recentLeaves.length === 0 ? (
-              <div className="text-center py-12 text-gray-400 text-sm">
-                No pending leave requests
-              </div>
-            ) : (
-              <table className="w-full text-sm">
-                <thead className="bg-gray-50 text-xs text-gray-500 uppercase tracking-wider">
-                  <tr>
-                    <th className="px-5 py-3 text-left">Employee</th>
-                    <th className="px-5 py-3 text-left">Type</th>
-                    <th className="px-5 py-3 text-left">From</th>
-                    <th className="px-5 py-3 text-left">Days</th>
-                    <th className="px-5 py-3 text-left">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {recentLeaves.map((req, i) => (
-                    <tr key={req.id ?? i} className="hover:bg-gray-50">
-                      <td className="px-5 py-3 font-medium text-gray-900">
-                        {req.employee_name ?? req.employee_id ?? '—'}
-                      </td>
-                      <td className="px-5 py-3 text-gray-600">
-                        {req.leave_type_name ?? req.leave_type ?? '—'}
-                      </td>
-                      <td className="px-5 py-3 text-gray-600">
-                        {req.from_date ?? req.start_date ?? '—'}
-                      </td>
-                      <td className="px-5 py-3 text-gray-600">
-                        {req.working_days ?? req.days ?? '—'}
-                      </td>
-                      <td className="px-5 py-3">
-                        <StatusBadge status={req.status} />
-                      </td>
+
+          {loading ? (
+            <div className="flex justify-center py-12">
+              <LoadingSpinner text="Loading leaves..." />
+            </div>
+          ) : recentLeaves.length === 0 ? (
+            <div className="text-center py-12 text-gray-400 text-sm">
+              No pending leave requests
+            </div>
+          ) : (
+            <>
+              {/* Desktop table */}
+              <div className="hidden md:block overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50 text-xs text-gray-500 uppercase tracking-wider">
+                    <tr>
+                      <th className="px-5 py-3 text-left">Employee</th>
+                      <th className="px-5 py-3 text-left">Type</th>
+                      <th className="px-5 py-3 text-left">From</th>
+                      <th className="px-5 py-3 text-left">Days</th>
+                      <th className="px-5 py-3 text-left">Status</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </div>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {recentLeaves.map((req, i) => (
+                      <tr key={req.id ?? i} className="hover:bg-gray-50">
+                        <td className="px-5 py-3 font-medium text-gray-900">
+                          {req.employee_name ?? req.employee_id ?? '—'}
+                        </td>
+                        <td className="px-5 py-3 text-gray-600">
+                          {req.leave_type_name ?? req.leave_type ?? '—'}
+                        </td>
+                        <td className="px-5 py-3 text-gray-600">
+                          {req.from_date ?? req.start_date ?? '—'}
+                        </td>
+                        <td className="px-5 py-3 text-gray-600">
+                          {req.working_days ?? req.days ?? '—'}
+                        </td>
+                        <td className="px-5 py-3">
+                          <StatusBadge status={req.status} />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Mobile cards */}
+              <div className="md:hidden divide-y divide-gray-100">
+                {recentLeaves.map((req, i) => (
+                  <div key={req.id ?? i} className="p-4">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <p className="font-semibold text-gray-900 text-sm">
+                          {req.employee_name ?? req.employee_id ?? '—'}
+                        </p>
+                        <p className="text-xs text-gray-500 mt-0.5">
+                          {req.leave_type_name ?? req.leave_type ?? '—'}
+                        </p>
+                      </div>
+                      <StatusBadge status={req.status} />
+                    </div>
+                    <div className="mt-2 grid grid-cols-2 gap-1 text-xs text-gray-500">
+                      <span>From: {req.from_date ?? req.start_date ?? '—'}</span>
+                      <span>Days: {req.working_days ?? req.days ?? '—'}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
         </div>
 
-        {/* Leave balance for E001 */}
+        {/* Leave balance */}
         <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
           <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
             <div>
               <h2 className="text-base font-semibold text-gray-900">My Leave Balance</h2>
-              <p className="text-xs text-gray-400 mt-0.5">Employee: {DEFAULT_EMP}</p>
+              <p className="text-xs text-gray-400 mt-0.5">Employee: {empId}</p>
             </div>
           </div>
           <div className="p-4 space-y-3">
@@ -253,36 +326,112 @@ export default function Dashboard() {
         </div>
       </div>
 
+      {/* My Commission This Month */}
+      <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
+        <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
+          <div>
+            <h2 className="text-base font-semibold text-gray-900">My Commission This Month</h2>
+            <p className="text-xs text-gray-400 mt-0.5">
+              {new Date().toLocaleString('en-IN', { month: 'long' })} {curYear}
+            </p>
+          </div>
+          <button
+            onClick={() => navigate('/commission')}
+            className="flex items-center gap-1 text-sm text-indigo-600 hover:text-indigo-800"
+          >
+            View all <ArrowRight className="h-4 w-4" />
+          </button>
+        </div>
+
+        {loading ? (
+          <div className="flex justify-center py-8">
+            <LoadingSpinner size="sm" text="Loading commission..." />
+          </div>
+        ) : commissionEntries.length === 0 ? (
+          <div className="text-center py-8 text-gray-400 text-sm">
+            No commission entries this month
+          </div>
+        ) : (
+          <>
+            {/* Desktop */}
+            <div className="hidden md:block overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50 text-xs text-gray-500 uppercase tracking-wider">
+                  <tr>
+                    <th className="px-5 py-3 text-left">Description</th>
+                    <th className="px-5 py-3 text-right">Deal Value</th>
+                    <th className="px-5 py-3 text-right">Commission</th>
+                    <th className="px-5 py-3 text-left">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {commissionEntries.slice(0, 5).map((e, i) => (
+                    <tr key={e.id ?? i} className="hover:bg-gray-50">
+                      <td className="px-5 py-3 text-gray-700">{e.description ?? '—'}</td>
+                      <td className="px-5 py-3 text-right text-gray-600">
+                        {e.deal_value ? formatINR(e.deal_value) : '—'}
+                      </td>
+                      <td className="px-5 py-3 text-right font-semibold text-indigo-700">
+                        {formatINR(e.commission_amount ?? 0)}
+                      </td>
+                      <td className="px-5 py-3"><StatusBadge status={e.status ?? 'pending'} /></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile */}
+            <div className="md:hidden divide-y divide-gray-100">
+              {commissionEntries.slice(0, 5).map((e, i) => (
+                <div key={e.id ?? i} className="p-4 flex justify-between items-center">
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">{e.description ?? '—'}</p>
+                    {e.deal_value && (
+                      <p className="text-xs text-gray-500 mt-0.5">Deal: {formatINR(e.deal_value)}</p>
+                    )}
+                  </div>
+                  <div className="text-right">
+                    <p className="font-bold text-indigo-700">{formatINR(e.commission_amount ?? 0)}</p>
+                    <div className="mt-1"><StatusBadge status={e.status ?? 'pending'} /></div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+
       {/* Quick actions */}
       <div className="bg-white rounded-lg border border-gray-200 shadow-sm px-5 py-4">
         <h2 className="text-base font-semibold text-gray-900 mb-4">Quick Actions</h2>
         <div className="flex flex-wrap gap-3">
           <button
             onClick={() => navigate('/leaves/request')}
-            className="flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-indigo-700 transition-colors"
+            className="flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-indigo-700 transition-colors min-h-[44px]"
           >
             <PlusCircle className="h-4 w-4" />
             Apply Leave
           </button>
           <button
-            onClick={() => navigate(`/employees/${DEFAULT_EMP}`)}
-            className="flex items-center gap-2 rounded-lg border border-gray-300 px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+            onClick={() => navigate(`/employees/${empId}`)}
+            className="flex items-center gap-2 rounded-lg border border-gray-300 px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors min-h-[44px]"
           >
             <FileText className="h-4 w-4" />
             View Salary Slip
           </button>
           <button
-            onClick={() => navigate('/payroll')}
-            className="flex items-center gap-2 rounded-lg border border-gray-300 px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+            onClick={() => navigate('/commission')}
+            className="flex items-center gap-2 rounded-lg border border-gray-300 px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors min-h-[44px]"
           >
-            <CreditCard className="h-4 w-4" />
-            Request Loan
+            <TrendingUp className="h-4 w-4" />
+            Log Commission
           </button>
           <button
             onClick={() => navigate('/reports')}
-            className="flex items-center gap-2 rounded-lg border border-gray-300 px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+            className="flex items-center gap-2 rounded-lg border border-gray-300 px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors min-h-[44px]"
           >
-            <TrendingUp className="h-4 w-4" />
+            <DollarSign className="h-4 w-4" />
             View Reports
           </button>
         </div>
