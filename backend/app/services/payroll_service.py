@@ -12,6 +12,7 @@ from app.models.payroll import PayrollCycle, SalarySlip, SlipStatus, PayrollStat
 from app.models.salary import SalaryStructure
 from app.models.employee import Employee
 from app.models.leave import LeaveRequest, LeaveStatus, LeaveEntitlement, LeaveType
+from app.models.commission import CommissionEntry
 from app.services.tax_service import calculate_all_deductions, calculate_pf
 from app.services.leave_service import get_holidays_for_range, calculate_working_days
 
@@ -192,12 +193,28 @@ def generate_salary_slip(db: Session, payroll_cycle_id: int, employee_id: int) -
         gross_paid = gross
         lwp_deduction = 0.0
 
+    # --- Commission ---
+    commission_entries = (
+        db.query(CommissionEntry)
+        .filter(
+            CommissionEntry.employee_id == employee_id,
+            CommissionEntry.month == cycle.month,
+            CommissionEntry.year == cycle.year,
+            CommissionEntry.status == "approved",
+        )
+        .all()
+    )
+    commission_amount = round(sum(e.commission_amount for e in commission_entries), 2)
+
+    # Add commission to gross
+    gross_paid_with_commission = round(gross_paid + commission_amount, 2)
+
     # --- Tax & statutory deductions ---
-    annual_gross = gross_paid * 12  # approximate annual
+    annual_gross = gross_paid_with_commission * 12  # approximate annual
     deductions = calculate_all_deductions(
         basic_salary=basic_paid,
         da_amount=da_paid,
-        gross_salary=gross_paid,
+        gross_salary=gross_paid_with_commission,
         annual_gross=annual_gross,
         state=employee.state,
     )
@@ -209,7 +226,7 @@ def generate_salary_slip(db: Session, payroll_cycle_id: int, employee_id: int) -
         + deductions["income_tax"],
         2,
     )
-    net_pay = round(gross_paid - total_deductions, 2)
+    net_pay = round(gross_paid_with_commission - total_deductions, 2)
 
     # --- YTD ---
     ytd = get_ytd_totals(db, employee_id, cycle.year, cycle.month)
@@ -241,7 +258,8 @@ def generate_salary_slip(db: Session, payroll_cycle_id: int, employee_id: int) -
     slip.special_allowance = special_paid
     slip.lta = lta_paid
     slip.other_allowances = other_paid
-    slip.gross_earnings = gross_paid
+    slip.commission_amount = commission_amount
+    slip.gross_earnings = gross_paid_with_commission
     slip.pf_employee = deductions["pf_employee"]
     slip.pf_employer = deductions["pf_employer"]
     slip.esi_employee = deductions["esi_employee"]
@@ -253,10 +271,14 @@ def generate_salary_slip(db: Session, payroll_cycle_id: int, employee_id: int) -
     slip.net_pay = net_pay
     slip.unpaid_leave_days = lwp_days
     slip.unpaid_leave_deduction = lwp_deduction
-    slip.ytd_earnings = ytd["ytd_earnings"] + gross_paid
+    slip.ytd_earnings = ytd["ytd_earnings"] + gross_paid_with_commission
     slip.ytd_deductions = ytd["ytd_deductions"] + total_deductions
     slip.ytd_tax = ytd["ytd_tax"] + deductions["income_tax"]
     slip.status = SlipStatus.draft
+
+    # Mark commission entries as linked to this payroll cycle
+    for ce in commission_entries:
+        ce.payroll_cycle_id = payroll_cycle_id
 
     db.commit()
     db.refresh(slip)

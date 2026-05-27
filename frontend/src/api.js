@@ -6,6 +6,12 @@ const api = axios.create({
   timeout: 10000,
 })
 
+// Initialise auth token from localStorage on app start
+const token = localStorage.getItem('auth_token')
+if (token) {
+  api.defaults.headers.common['Authorization'] = `Bearer ${token}`
+}
+
 api.interceptors.response.use(
   (response) => response,
   (error) => {
@@ -13,6 +19,16 @@ api.interceptors.response.use(
     return Promise.reject({ ...error, userMessage: message })
   }
 )
+
+// ─── Auth ─────────────────────────────────────────────────────────────────────
+export const authAPI = {
+  login: (email, password) => api.post('/auth/login', { email, password }),
+  me: () => api.get('/auth/me'),
+  changePassword: (current, next) =>
+    api.post('/auth/change-password', { current_password: current, new_password: next }),
+  setPassword: (employee_id, new_password) =>
+    api.post('/auth/set-password', { employee_id, new_password }),
+}
 
 // ─── Employees ────────────────────────────────────────────────────────────────
 export const employees = {
@@ -50,6 +66,19 @@ export const payroll = {
   createLoan: (data) => api.post('/payroll/loans/', data),
   getLoans: (params) => api.get('/payroll/loans/', { params }),
   approveLoan: (id) => api.post(`/payroll/loans/${id}/approve/`),
+}
+
+// ─── Commission ───────────────────────────────────────────────────────────────
+export const commissionAPI = {
+  getStructures: () => api.get('/commission/structures'),
+  createStructure: (data) => api.post('/commission/structures', data),
+  getEntries: (params) => api.get('/commission/entries', { params }),
+  createEntry: (data) => api.post('/commission/entries', data),
+  approveEntry: (id, data) => api.put(`/commission/entries/${id}/approve`, data),
+  getEmployeeSummary: (empId, month, year) =>
+    api.get(`/commission/employees/${empId}/summary`, { params: { month, year } }),
+  assignStructure: (empId, data) => api.post(`/commission/employees/${empId}/assign`, data),
+  getAssignment: (empId) => api.get(`/commission/employees/${empId}/assignment`),
 }
 
 // ─── Reports ──────────────────────────────────────────────────────────────────

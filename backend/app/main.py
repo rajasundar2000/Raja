@@ -17,6 +17,8 @@ from app.routers import employees as emp_router
 from app.routers import leaves as leave_router
 from app.routers import payroll as payroll_router
 from app.routers import reports as report_router
+from app.routers import auth as auth_router
+from app.routers import commission as commission_router
 
 
 # ============================================================
@@ -176,9 +178,12 @@ def seed_employees(db):
     from app.models.employee import Employee, UserRole
     from app.models.salary import SalaryStructure
     from app.models.leave import LeaveType, LeaveEntitlement
+    from app.auth import get_password_hash
 
     if db.query(Employee).count() > 0:
         return
+
+    default_password_hash = get_password_hash("Employee@123")
 
     # Create employees
     employees_data = [
@@ -194,6 +199,8 @@ def seed_employees(db):
             role=UserRole.employee,
             state="Karnataka",
             is_active=True,
+            password_hash=default_password_hash,
+            is_password_set=True,
         ),
         Employee(
             employee_id="E002",
@@ -207,6 +214,8 @@ def seed_employees(db):
             role=UserRole.manager,
             state="Karnataka",
             is_active=True,
+            password_hash=default_password_hash,
+            is_password_set=True,
         ),
         Employee(
             employee_id="E003",
@@ -220,6 +229,8 @@ def seed_employees(db):
             role=UserRole.hr,
             state="Karnataka",
             is_active=True,
+            password_hash=default_password_hash,
+            is_password_set=True,
         ),
     ]
     db.add_all(employees_data)
@@ -309,6 +320,73 @@ def seed_employees(db):
     print("  [seed] Leave entitlements created.")
 
 
+def seed_commissions(db):
+    from app.models.commission import CommissionStructure, CommissionType, EmployeeCommissionAssignment, CommissionEntry
+    from app.models.employee import Employee
+
+    if db.query(CommissionStructure).count() > 0:
+        return
+
+    # 1. Sales Commission — 5% on deal value, monthly target ₹5,00,000
+    sales_commission = CommissionStructure(
+        name="Sales Commission",
+        description="5% commission on every deal closed. Monthly target ₹5,00,000.",
+        commission_type=CommissionType.PERCENTAGE,
+        percentage_rate=5.0,
+        monthly_target=500000.0,
+        is_active=True,
+    )
+    # 2. Flat Deal Bonus — ₹5,000 per deal closed
+    flat_bonus = CommissionStructure(
+        name="Flat Deal Bonus",
+        description="Fixed ₹5,000 bonus per deal regardless of deal size.",
+        commission_type=CommissionType.FLAT,
+        flat_amount=5000.0,
+        is_active=True,
+    )
+    db.add_all([sales_commission, flat_bonus])
+    db.commit()
+    print("  [seed] Commission structures created.")
+
+    # Assign "Sales Commission" to E001 effective 2025-01-01
+    e001 = db.query(Employee).filter(Employee.employee_id == "E001").first()
+    if e001:
+        assignment = EmployeeCommissionAssignment(
+            employee_id=e001.id,
+            commission_structure_id=sales_commission.id,
+            effective_from=date(2025, 1, 1),
+            is_active=True,
+        )
+        db.add(assignment)
+        db.commit()
+        print("  [seed] Commission assignment for E001 created.")
+
+        # 2 sample entries for E001 in May 2025
+        entry1 = CommissionEntry(
+            employee_id=e001.id,
+            commission_structure_id=sales_commission.id,
+            month=5,
+            year=2025,
+            description="Deal: TechCorp Software License",
+            deal_value=200000.0,
+            commission_amount=10000.0,
+            status="approved",
+        )
+        entry2 = CommissionEntry(
+            employee_id=e001.id,
+            commission_structure_id=sales_commission.id,
+            month=5,
+            year=2025,
+            description="Deal: StartupXYZ Annual Subscription",
+            deal_value=150000.0,
+            commission_amount=7500.0,
+            status="approved",
+        )
+        db.add_all([entry1, entry2])
+        db.commit()
+        print("  [seed] Sample commission entries for E001 created.")
+
+
 def run_seed():
     """Run all seed operations."""
     db = SessionLocal()
@@ -317,6 +395,7 @@ def run_seed():
         seed_leave_types(db)
         seed_holidays(db)
         seed_employees(db)
+        seed_commissions(db)
         print("[startup] Seed complete.")
     except Exception as e:
         print(f"[startup] Seed error: {e}")
@@ -371,10 +450,12 @@ app.add_middleware(
 
 API_PREFIX = "/api"
 
+app.include_router(auth_router.router, prefix=API_PREFIX, tags=["auth"])
 app.include_router(emp_router.router, prefix=API_PREFIX)
 app.include_router(leave_router.router, prefix=API_PREFIX)
 app.include_router(payroll_router.router, prefix=API_PREFIX)
 app.include_router(report_router.router, prefix=API_PREFIX)
+app.include_router(commission_router.router, prefix=API_PREFIX, tags=["commission"])
 
 
 # ============================================================

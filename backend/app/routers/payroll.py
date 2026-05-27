@@ -13,6 +13,7 @@ from app.models.payroll import (
     PayrollCycle, SalarySlip, Loan, LoanPayment,
     PayrollStatus, SlipStatus, LoanStatus
 )
+from app.models.commission import CommissionEntry
 from app.schemas.payroll import (
     PayrollCycleCreate, PayrollCycleResponse,
     SalarySlipResponse,
@@ -212,6 +213,45 @@ def approve_payroll_cycle(
     }
 
 
+@router.post("/payroll-cycles/{cycle_id}/mark-paid")
+def mark_payroll_paid(
+    cycle_id: int,
+    db: Session = Depends(get_db),
+):
+    """Mark an approved payroll cycle as paid and update linked commission entries."""
+    cycle = db.query(PayrollCycle).filter(PayrollCycle.id == cycle_id).first()
+    if not cycle:
+        raise HTTPException(status_code=404, detail="Payroll cycle not found")
+
+    if cycle.status != PayrollStatus.approved:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Can only mark approved cycles as paid. Current status: {cycle.status}",
+        )
+
+    # Mark all salary slips as paid
+    db.query(SalarySlip).filter(
+        SalarySlip.payroll_cycle_id == cycle_id,
+        SalarySlip.status == SlipStatus.approved,
+    ).update({"status": SlipStatus.paid})
+
+    # Mark linked commission entries as paid
+    db.query(CommissionEntry).filter(
+        CommissionEntry.payroll_cycle_id == cycle_id,
+        CommissionEntry.status == "approved",
+    ).update({"status": "paid"})
+
+    cycle.status = PayrollStatus.paid
+    cycle.payment_date = date.today()
+    db.commit()
+    db.refresh(cycle)
+
+    return {
+        "message": "Payroll cycle marked as paid",
+        "cycle": _serialize_cycle(cycle),
+    }
+
+
 @router.get("/employees/{employee_id}/salary-slips", response_model=dict)
 def list_employee_salary_slips(
     employee_id: int,
@@ -389,6 +429,7 @@ def _serialize_slip(slip: SalarySlip, cycle: Optional[PayrollCycle] = None) -> d
         "lta": slip.lta,
         "other_allowances": slip.other_allowances,
         "gross_earnings": slip.gross_earnings,
+        "commission_amount": slip.commission_amount,
         "pf_employee": slip.pf_employee,
         "pf_employer": slip.pf_employer,
         "esi_employee": slip.esi_employee,
