@@ -1,0 +1,50 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+*.egg-info/
+dist/
+build/
+*.egg
+.eggs/
+pip-wheel-metadata/
+*.log
+*.db
+*.sqlite3
+
+# FastAPI / SQLite
+backend/leave_payroll.db
+backend/test.db
+
+# Node / Vite
+node_modules/
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+.npm
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Reports
+*.pdf
+reports/
+generated/
