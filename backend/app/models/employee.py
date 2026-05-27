@@ -8,6 +8,7 @@ from sqlalchemy.orm import relationship
 from app.database import Base
 
 
+
 class UserRole(str, enum.Enum):
     employee = "employee"
     manager = "manager"
@@ -39,6 +40,11 @@ class Employee(Base):
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
+    # Authentication fields
+    password_hash = Column(String, nullable=True)
+    last_login = Column(DateTime, nullable=True)
+    is_password_set = Column(Boolean, default=False)
+
     # Relationships
     manager = relationship("Employee", remote_side=[id], foreign_keys=[manager_id], backref="subordinates")
     salary_structures = relationship("SalaryStructure", back_populates="employee", foreign_keys="SalaryStructure.employee_id")
@@ -46,3 +52,4 @@ class Employee(Base):
     leave_requests = relationship("LeaveRequest", back_populates="employee", foreign_keys="LeaveRequest.employee_id")
     salary_slips = relationship("SalarySlip", back_populates="employee", foreign_keys="SalarySlip.employee_id")
     loans = relationship("Loan", back_populates="employee", foreign_keys="Loan.employee_id")
+    commission_assignments = relationship("EmployeeCommissionAssignment", back_populates="employee")

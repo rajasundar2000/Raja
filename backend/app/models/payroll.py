@@ -110,6 +110,9 @@ class SalarySlip(Base):
     total_deductions = Column(Float, default=0.0, nullable=False)
     net_pay = Column(Float, default=0.0, nullable=False)
 
+    # Commission
+    commission_amount = Column(Float, default=0.0, nullable=False)
+
     # Leave deductions
     unpaid_leave_days = Column(Float, default=0.0, nullable=False)
     unpaid_leave_deduction = Column(Float, default=0.0, nullable=False)

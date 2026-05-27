@@ -2,6 +2,7 @@ from app.models.employee import Employee, UserRole
 from app.models.salary import SalaryStructure
 from app.models.leave import LeaveType, LeaveEntitlement, LeaveRequest, LeaveApproval, LeaveStatus, ApprovalAction
 from app.models.payroll import Holiday, PayrollCycle, SalarySlip, Loan, LoanPayment, PayrollStatus, SlipStatus, LoanType, LoanStatus, HolidayType, HolidayCountry
+from app.models.commission import CommissionStructure, EmployeeCommissionAssignment, CommissionEntry, CommissionType
 
 __all__ = [
     "Employee", "UserRole",
@@ -9,4 +10,5 @@ __all__ = [
     "LeaveType", "LeaveEntitlement", "LeaveRequest", "LeaveApproval", "LeaveStatus", "ApprovalAction",
     "Holiday", "PayrollCycle", "SalarySlip", "Loan", "LoanPayment",
     "PayrollStatus", "SlipStatus", "LoanType", "LoanStatus", "HolidayType", "HolidayCountry",
+    "CommissionStructure", "EmployeeCommissionAssignment", "CommissionEntry", "CommissionType",
 ]
