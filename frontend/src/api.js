@@ -1,7 +1,9 @@
 import axios from 'axios'
 
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api'
+
 const api = axios.create({
-  baseURL: 'http://localhost:8000/api',
+  baseURL: API_URL,
   headers: { 'Content-Type': 'application/json' },
   timeout: 10000,
 })
@@ -86,6 +88,52 @@ export const reports = {
   getLeaveUtilization: (params) => api.get('/reports/leave-utilization/', { params }),
   getPayrollSummary: (cycleId) => api.get(`/reports/payroll-summary/${cycleId}/`),
   getEmployeeYTD: (empId) => api.get(`/reports/employee-ytd/${empId}/`),
+}
+
+// ─── Invitations ──────────────────────────────────────────────────────────────
+export const invitationAPI = {
+  send: (data) => api.post('/invitations/send', data),
+  getAll: () => api.get('/invitations'),
+  cancel: (id) => api.delete(`/invitations/${id}`),
+  validateToken: (token) => api.get(`/invitations/accept/${token}`),
+  accept: (token, data) => api.post(`/invitations/accept/${token}`, data),
+}
+
+// ─── Announcements ────────────────────────────────────────────────────────────
+export const announcementAPI = {
+  getAll: () => api.get('/announcements'),
+  create: (data) => api.post('/announcements', data),
+  update: (id, data) => api.put(`/announcements/${id}`, data),
+  delete: (id) => api.delete(`/announcements/${id}`),
+}
+
+// ─── Expenses ─────────────────────────────────────────────────────────────────
+export const expenseAPI = {
+  getAll: (params) => api.get('/expenses', { params }),
+  create: (data) => api.post('/expenses', data),
+  getOne: (id) => api.get(`/expenses/${id}`),
+  approve: (id, data) => api.put(`/expenses/${id}/approve`, data),
+  getSummary: (params) => api.get('/expenses/summary', { params }),
+}
+
+// ─── Integrations ─────────────────────────────────────────────────────────────
+export const integrationAPI = {
+  getGSheetsStatus: () => api.get('/integrations/google-sheets/status'),
+  configureGSheets: (data) => api.post('/integrations/google-sheets/configure', data),
+  syncEmployees: () => api.post('/integrations/google-sheets/sync/employees'),
+  syncPayroll: (cycleId) => api.post(`/integrations/google-sheets/sync/payroll?cycle_id=${cycleId}`),
+  syncLeaves: (year) => api.post(`/integrations/google-sheets/sync/leaves?year=${year}`),
+  importEmployees: () => api.get('/integrations/google-sheets/import/employees'),
+}
+
+// ─── Profile ──────────────────────────────────────────────────────────────────
+export const profileAPI = {
+  get: () => api.get('/profile'),
+  update: (data) => api.put('/profile', data),
+  changePassword: (data) => api.post('/profile/change-password', data),
+  getLeaveBalance: () => api.get('/profile/leave-balance'),
+  getSalarySlips: () => api.get('/profile/salary-slips'),
+  getExpenses: () => api.get('/profile/expenses'),
 }
 
 export default api

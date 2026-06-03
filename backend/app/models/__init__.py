@@ -3,6 +3,10 @@ from app.models.salary import SalaryStructure
 from app.models.leave import LeaveType, LeaveEntitlement, LeaveRequest, LeaveApproval, LeaveStatus, ApprovalAction
 from app.models.payroll import Holiday, PayrollCycle, SalarySlip, Loan, LoanPayment, PayrollStatus, SlipStatus, LoanType, LoanStatus, HolidayType, HolidayCountry
 from app.models.commission import CommissionStructure, EmployeeCommissionAssignment, CommissionEntry, CommissionType
+from app.models.invitation import EmployeeInvitation
+from app.models.announcement import Announcement, AnnouncementPriority
+from app.models.expense import ExpenseClaim, ExpenseCategory
+from app.models.app_settings import AppSetting
 
 __all__ = [
     "Employee", "UserRole",
@@ -11,4 +15,8 @@ __all__ = [
     "Holiday", "PayrollCycle", "SalarySlip", "Loan", "LoanPayment",
     "PayrollStatus", "SlipStatus", "LoanType", "LoanStatus", "HolidayType", "HolidayCountry",
     "CommissionStructure", "EmployeeCommissionAssignment", "CommissionEntry", "CommissionType",
+    "EmployeeInvitation",
+    "Announcement", "AnnouncementPriority",
+    "ExpenseClaim", "ExpenseCategory",
+    "AppSetting",
 ]
