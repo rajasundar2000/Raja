@@ -10,8 +10,10 @@ import {
   FileText,
   CreditCard,
   AlertCircle,
+  X,
+  Bell,
 } from 'lucide-react'
-import { employees, leaves, payroll, commissionAPI } from '../api.js'
+import { employees, leaves, payroll, commissionAPI, announcementAPI } from '../api.js'
 import { useAuth } from '../context/AuthContext.jsx'
 import LoadingSpinner from '../components/LoadingSpinner.jsx'
 import StatusBadge from '../components/StatusBadge.jsx'
@@ -65,6 +67,10 @@ export default function Dashboard() {
   const [commissionEntries, setCommissionEntries] = useState([])
   const [commissionSummary, setCommissionSummary] = useState(null)
   const [error, setError] = useState(null)
+  const [announcements, setAnnouncements] = useState([])
+  const [dismissedIds, setDismissedIds] = useState(() => {
+    try { return JSON.parse(sessionStorage.getItem('dismissed_announcements') || '[]') } catch { return [] }
+  })
 
   const empId = user?.employee_id ?? 'E001'
   const isManager = ['hr', 'super_admin', 'manager'].includes(user?.role)
@@ -85,9 +91,10 @@ export default function Dashboard() {
           payroll.getLoans({ page_size: 100 }),
           commissionAPI.getEntries({ employee_id: empId, month: curMonth, year: curYear }),
           commissionAPI.getEmployeeSummary(empId, curMonth, curYear),
+          announcementAPI.getAll(),
         ]
 
-        const [empRes, leaveReqRes, balRes, cycleRes, loanRes, commRes, commSumRes] =
+        const [empRes, leaveReqRes, balRes, cycleRes, loanRes, commRes, commSumRes, annRes] =
           await Promise.allSettled(calls)
 
         if (empRes.status === 'fulfilled') {
@@ -122,6 +129,10 @@ export default function Dashboard() {
         if (commSumRes.status === 'fulfilled') {
           setCommissionSummary(commSumRes.value.data)
         }
+        if (annRes.status === 'fulfilled') {
+          const d = annRes.value.data
+          setAnnouncements(d.results ?? d.announcements ?? (Array.isArray(d) ? d : []))
+        }
       } catch {
         setError('Failed to load dashboard data. Backend may not be running.')
         toast.error('Could not connect to backend API')
@@ -133,6 +144,14 @@ export default function Dashboard() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [empId])
 
+  function dismissAnnouncement(id) {
+    const updated = [...dismissedIds, id]
+    setDismissedIds(updated)
+    sessionStorage.setItem('dismissed_announcements', JSON.stringify(updated))
+  }
+
+  const visibleAnnouncements = announcements.filter((a) => !dismissedIds.includes(a.id))
+
   const latestCycle = payrollCycles[0]
   const totalPayroll = latestCycle?.total_net_pay ?? latestCycle?.total_amount ?? 0
 
@@ -143,8 +162,42 @@ export default function Dashboard() {
 
   const firstName = user?.full_name?.split(' ')[0] ?? 'there'
 
+  function announcementStyle(priority) {
+    switch (priority) {
+      case 'urgent': return 'bg-red-50 border-red-300 text-red-900'
+      case 'high': return 'bg-orange-50 border-orange-300 text-orange-900'
+      case 'normal': return 'bg-blue-50 border-blue-300 text-blue-900'
+      default: return 'bg-gray-50 border-gray-300 text-gray-700'
+    }
+  }
+
   return (
     <div className="space-y-6">
+      {/* Announcements */}
+      {visibleAnnouncements.length > 0 && (
+        <div className="space-y-2">
+          {visibleAnnouncements.map((ann) => (
+            <div
+              key={ann.id}
+              className={`flex items-start gap-3 rounded-xl border px-4 py-3 ${announcementStyle(ann.priority)}`}
+            >
+              <Bell className="h-4 w-4 mt-0.5 flex-shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="font-semibold text-sm">{ann.title}</p>
+                <p className="text-sm mt-0.5 opacity-90">{ann.content}</p>
+              </div>
+              <button
+                onClick={() => dismissAnnouncement(ann.id)}
+                className="flex-shrink-0 p-1 rounded-lg hover:bg-black/5 transition-colors"
+                aria-label="Dismiss"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Greeting */}
       <div>
         <h1 className="text-2xl font-bold text-gray-900">

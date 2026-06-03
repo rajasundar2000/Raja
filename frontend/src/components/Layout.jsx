@@ -14,7 +14,9 @@ import {
   LogOut,
   ChevronDown,
   TrendingUp,
-  Grid3X3,
+  Settings,
+  Receipt,
+  User,
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 
@@ -24,16 +26,17 @@ const ALL_NAV = [
   { to: '/leaves', label: 'Leave Management', icon: Calendar, roles: null },
   { to: '/payroll', label: 'Payroll', icon: DollarSign, roles: ['hr', 'finance', 'super_admin'] },
   { to: '/commission', label: 'Commission', icon: TrendingUp, roles: null },
+  { to: '/expenses', label: 'Expenses', icon: Receipt, roles: null },
   { to: '/reports', label: 'Reports', icon: BarChart2, roles: ['hr', 'super_admin', 'manager', 'finance'] },
+  { to: '/settings', label: 'Settings', icon: Settings, roles: ['hr', 'super_admin'] },
 ]
 
 // Bottom nav icons (mobile only): max 5
 const BOTTOM_NAV = [
   { to: '/', label: 'Home', icon: LayoutDashboard, exact: true, roles: null },
-  { to: '/employees', label: 'Employees', icon: Users, roles: ['hr', 'super_admin', 'manager'] },
   { to: '/leaves', label: 'Leaves', icon: Calendar, roles: null },
-  { to: '/payroll', label: 'Payroll', icon: DollarSign, roles: ['hr', 'finance', 'super_admin'] },
-  { to: '/commission', label: 'Commission', icon: TrendingUp, roles: null },
+  { to: '/expenses', label: 'Expenses', icon: Receipt, roles: null },
+  { to: '/profile', label: 'Profile', icon: User, roles: null },
 ]
 
 function LiveClock({ timezone, label }) {
@@ -204,28 +207,32 @@ export default function Layout({ children }) {
 
         {/* User profile (sidebar bottom) */}
         <div className="border-t border-indigo-800 px-4 py-4 flex-shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="h-9 w-9 rounded-full bg-indigo-500 flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
-              {initials}
+          <NavLink
+            to="/profile"
+            className="flex items-center gap-3 rounded-lg px-2 py-2 hover:bg-indigo-800 transition-colors group"
+          >
+            <div className="relative h-9 w-9 flex-shrink-0">
+              <div className="h-9 w-9 rounded-full bg-indigo-500 flex items-center justify-center text-white text-sm font-bold">
+                {initials}
+              </div>
+              <span className={`absolute -bottom-0.5 -right-0.5 text-[9px] font-bold px-1 rounded-full leading-tight ${roleBadgeColor(user?.role)}`}>
+                {(user?.role ?? 'emp').slice(0, 3)}
+              </span>
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium text-white truncate">
                 {user?.full_name ?? 'User'}
               </p>
-              <span
-                className={`inline-block mt-0.5 text-xs font-medium px-1.5 py-0.5 rounded ${roleBadgeColor(user?.role)}`}
-              >
-                {user?.role ?? 'employee'}
-              </span>
+              <p className="text-xs text-indigo-400 group-hover:text-indigo-300">View Profile</p>
             </div>
             <button
-              onClick={handleLogout}
+              onClick={(e) => { e.preventDefault(); handleLogout() }}
               className="p-1.5 text-indigo-300 hover:text-white hover:bg-indigo-700 rounded-lg transition-colors"
               title="Logout"
             >
               <LogOut className="h-4 w-4" />
             </button>
-          </div>
+          </NavLink>
         </div>
       </aside>
 
@@ -302,6 +309,25 @@ export default function Layout({ children }) {
                       {user?.role}
                     </span>
                   </div>
+                  <NavLink
+                    to="/profile"
+                    onClick={() => setUserMenuOpen(false)}
+                    className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                  >
+                    <User className="h-4 w-4" />
+                    My Profile
+                  </NavLink>
+                  {['hr', 'super_admin'].includes(user?.role) && (
+                    <NavLink
+                      to="/settings"
+                      onClick={() => setUserMenuOpen(false)}
+                      className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                    >
+                      <Settings className="h-4 w-4" />
+                      Settings
+                    </NavLink>
+                  )}
+                  <div className="border-t border-gray-100 mt-1" />
                   <button
                     onClick={handleLogout}
                     className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors"
@@ -325,7 +351,7 @@ export default function Layout({ children }) {
           className="lg:hidden fixed bottom-0 left-0 right-0 z-20 bg-white border-t border-gray-200 flex items-stretch"
           style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
         >
-          {filteredBottomNav.slice(0, 5).map(({ to, label, icon: Icon, exact }) => (
+          {filteredBottomNav.map(({ to, label, icon: Icon, exact }) => (
             <NavLink
               key={to}
               to={to}
@@ -338,9 +364,7 @@ export default function Layout({ children }) {
             >
               {({ isActive }) => (
                 <>
-                  <div
-                    className={`p-1 rounded-lg ${isActive ? 'bg-indigo-100' : ''}`}
-                  >
+                  <div className={`p-1 rounded-lg ${isActive ? 'bg-indigo-100' : ''}`}>
                     <Icon className="h-5 w-5" />
                   </div>
                   <span className="leading-none">{label}</span>
@@ -348,24 +372,6 @@ export default function Layout({ children }) {
               )}
             </NavLink>
           ))}
-          {/* More button if reports not in bottom nav */}
-          <NavLink
-            to="/reports"
-            className={({ isActive }) =>
-              `flex-1 flex flex-col items-center justify-center py-2 min-h-[56px] text-xs font-medium transition-colors gap-1 ${
-                isActive ? 'text-indigo-600' : 'text-gray-500 hover:text-indigo-500'
-              }`
-            }
-          >
-            {({ isActive }) => (
-              <>
-                <div className={`p-1 rounded-lg ${isActive ? 'bg-indigo-100' : ''}`}>
-                  <Grid3X3 className="h-5 w-5" />
-                </div>
-                <span className="leading-none">More</span>
-              </>
-            )}
-          </NavLink>
         </nav>
       </div>
     </div>

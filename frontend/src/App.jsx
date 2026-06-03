@@ -11,12 +11,17 @@ import PayrollManagement from './pages/PayrollManagement.jsx'
 import PayrollDetail from './pages/PayrollDetail.jsx'
 import Reports from './pages/Reports.jsx'
 import Commission from './pages/Commission.jsx'
+import AcceptInvite from './pages/AcceptInvite.jsx'
+import Profile from './pages/Profile.jsx'
+import Expenses from './pages/Expenses.jsx'
+import Settings from './pages/Settings.jsx'
 
 export default function App() {
   return (
     <Routes>
-      {/* Public route */}
+      {/* Public routes — no Layout, no auth required */}
       <Route path="/login" element={<Login />} />
+      <Route path="/accept-invite/:token" element={<AcceptInvite />} />
 
       {/* Protected routes — all wrapped in Layout */}
       <Route
@@ -65,6 +70,19 @@ export default function App() {
                 />
 
                 <Route path="/commission" element={<Commission />} />
+
+                <Route path="/profile" element={<Profile />} />
+
+                <Route path="/expenses" element={<Expenses />} />
+
+                <Route
+                  path="/settings"
+                  element={
+                    <ProtectedRoute allowedRoles={['hr', 'super_admin']}>
+                      <Settings />
+                    </ProtectedRoute>
+                  }
+                />
 
                 <Route
                   path="/reports"
