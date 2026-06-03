@@ -288,6 +288,23 @@ def approve_or_reject_leave(
         raise HTTPException(status_code=400, detail=message)
 
     req = db.query(LeaveRequest).filter(LeaveRequest.id == request_id).first()
+
+    # Fire-and-forget email notification
+    try:
+        from app.services.email_service import send_leave_status_email
+        if req and req.employee and req.employee.email:
+            send_leave_status_email(
+                to_email=req.employee.email,
+                employee_name=req.employee.full_name,
+                leave_type=req.leave_type.name if req.leave_type else "Leave",
+                from_date=str(req.from_date),
+                to_date=str(req.to_date),
+                status=payload.action.value,
+                comments=payload.comments or "",
+            )
+    except Exception:
+        pass  # Email failure should not affect the approval response
+
     return {
         "message": message,
         "leave_request": _serialize_leave_request(req),

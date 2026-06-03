@@ -246,6 +246,30 @@ def mark_payroll_paid(
     db.commit()
     db.refresh(cycle)
 
+    # Fire-and-forget salary slip email notifications
+    try:
+        import calendar
+        from app.services.email_service import send_salary_slip_email
+        paid_slips = db.query(SalarySlip).filter(
+            SalarySlip.payroll_cycle_id == cycle_id,
+            SalarySlip.status == SlipStatus.paid,
+        ).all()
+        month_name = calendar.month_name[cycle.month]
+        for slip in paid_slips:
+            if slip.employee and slip.employee.email:
+                try:
+                    send_salary_slip_email(
+                        to_email=slip.employee.email,
+                        employee_name=slip.employee.full_name,
+                        month=month_name,
+                        year=cycle.year,
+                        net_pay=slip.net_pay,
+                    )
+                except Exception:
+                    pass
+    except Exception:
+        pass  # Email failures should not affect the payroll response
+
     return {
         "message": "Payroll cycle marked as paid",
         "cycle": _serialize_cycle(cycle),

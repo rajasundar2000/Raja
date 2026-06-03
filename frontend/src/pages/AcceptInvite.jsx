@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { IndianRupee, Eye, EyeOff, CheckCircle, AlertCircle, Loader2 } from 'lucide-react'
+import { IndianRupee, Eye, EyeOff, CheckCircle, AlertCircle, Lock } from 'lucide-react'
 import { invitationAPI } from '../api.js'
+import toast from 'react-hot-toast'
 
-function passwordStrength(password) {
+function getPasswordStrength(password) {
   if (!password) return { level: 0, label: '', color: '' }
   let score = 0
   if (password.length >= 8) score++
@@ -12,8 +13,27 @@ function passwordStrength(password) {
   if (/[0-9]/.test(password)) score++
   if (/[^A-Za-z0-9]/.test(password)) score++
   if (score <= 1) return { level: 1, label: 'Weak', color: 'bg-red-500' }
-  if (score <= 3) return { level: 2, label: 'Medium', color: 'bg-amber-500' }
+  if (score <= 3) return { level: 2, label: 'Medium', color: 'bg-yellow-500' }
   return { level: 3, label: 'Strong', color: 'bg-green-500' }
+}
+
+function PasswordStrengthBar({ password }) {
+  const strength = getPasswordStrength(password)
+  if (!password) return null
+  const widths = { 1: 'w-1/3', 2: 'w-2/3', 3: 'w-full' }
+  const textColors = { 1: 'text-red-600', 2: 'text-yellow-600', 3: 'text-green-600' }
+  return (
+    <div className="mt-1.5">
+      <div className="h-1.5 w-full bg-gray-200 rounded-full overflow-hidden">
+        <div
+          className={`h-full rounded-full transition-all duration-300 ${strength.color} ${widths[strength.level]}`}
+        />
+      </div>
+      <p className={`text-xs mt-1 font-medium ${textColors[strength.level]}`}>
+        {strength.label} password
+      </p>
+    </div>
+  )
 }
 
 export default function AcceptInvite() {
@@ -29,7 +49,6 @@ export default function AcceptInvite() {
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirm, setShowConfirm] = useState(false)
   const [submitting, setSubmitting] = useState(false)
-  const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
 
   useEffect(() => {
@@ -46,25 +65,23 @@ export default function AcceptInvite() {
     validate()
   }, [token])
 
-  const strength = passwordStrength(password)
-
   async function handleSubmit(e) {
     e.preventDefault()
-    setError('')
     if (password.length < 8) {
-      setError('Password must be at least 8 characters.')
+      toast.error('Password must be at least 8 characters')
       return
     }
     if (password !== confirmPassword) {
-      setError('Passwords do not match.')
+      toast.error('Passwords do not match')
       return
     }
     setSubmitting(true)
     try {
       await invitationAPI.accept(token, { password, confirm_password: confirmPassword })
       setSuccess(true)
+      toast.success('Account created successfully!')
     } catch (err) {
-      setError(err.userMessage || 'Failed to create account. The link may have expired.')
+      toast.error(err.userMessage || 'Failed to create account')
     } finally {
       setSubmitting(false)
     }
@@ -73,9 +90,9 @@ export default function AcceptInvite() {
   if (loadingInvite) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="flex flex-col items-center gap-3">
-          <Loader2 className="h-8 w-8 animate-spin text-indigo-600" />
-          <p className="text-sm text-gray-500">Validating invitation...</p>
+        <div className="text-center">
+          <div className="h-10 w-10 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-gray-500 text-sm">Validating invitation…</p>
         </div>
       </div>
     )
@@ -83,20 +100,18 @@ export default function AcceptInvite() {
 
   if (invalidToken) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
-        <div className="w-full max-w-md bg-white rounded-2xl shadow-lg border border-gray-200 p-8 text-center">
-          <div className="flex justify-center mb-4">
-            <div className="h-14 w-14 rounded-full bg-red-100 flex items-center justify-center">
-              <AlertCircle className="h-7 w-7 text-red-600" />
-            </div>
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <div className="bg-white rounded-2xl shadow-lg border border-gray-200 p-8 w-full max-w-md text-center">
+          <div className="h-16 w-16 rounded-full bg-red-100 flex items-center justify-center mx-auto mb-4">
+            <AlertCircle className="h-8 w-8 text-red-500" />
           </div>
-          <h1 className="text-xl font-bold text-gray-900 mb-2">Invalid Invitation</h1>
-          <p className="text-sm text-gray-500 mb-6">
-            This invitation link is invalid or has expired. Please ask your HR team for a new invitation.
+          <h1 className="text-xl font-bold text-gray-900 mb-2">Invalid or Expired Invitation</h1>
+          <p className="text-gray-500 text-sm mb-6">
+            This invitation link is no longer valid. Please contact your HR administrator for a new invitation.
           </p>
           <button
             onClick={() => navigate('/login')}
-            className="w-full rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-indigo-700 transition-colors"
+            className="w-full rounded-xl bg-indigo-600 px-4 py-3 text-sm font-semibold text-white hover:bg-indigo-700 transition-colors"
           >
             Go to Login
           </button>
@@ -107,20 +122,18 @@ export default function AcceptInvite() {
 
   if (success) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
-        <div className="w-full max-w-md bg-white rounded-2xl shadow-lg border border-gray-200 p-8 text-center">
-          <div className="flex justify-center mb-4">
-            <div className="h-14 w-14 rounded-full bg-green-100 flex items-center justify-center">
-              <CheckCircle className="h-7 w-7 text-green-600" />
-            </div>
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <div className="bg-white rounded-2xl shadow-lg border border-gray-200 p-8 w-full max-w-md text-center">
+          <div className="h-16 w-16 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-4">
+            <CheckCircle className="h-8 w-8 text-green-500" />
           </div>
           <h1 className="text-xl font-bold text-gray-900 mb-2">Account Created!</h1>
-          <p className="text-sm text-gray-500 mb-6">
-            Welcome to LeavePayroll, {invitation?.full_name}! Your account has been set up successfully. You can now log in with your email and the password you just created.
+          <p className="text-gray-500 text-sm mb-6">
+            Your account has been set up successfully. You can now log in with your email and the password you just created.
           </p>
           <button
             onClick={() => navigate('/login')}
-            className="w-full rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-indigo-700 transition-colors"
+            className="w-full rounded-xl bg-indigo-600 px-4 py-3 text-sm font-semibold text-white hover:bg-indigo-700 transition-colors"
           >
             Go to Login
           </button>
@@ -130,146 +143,116 @@ export default function AcceptInvite() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4 py-12">
-      <div className="w-full max-w-md">
-        {/* Logo / Brand */}
-        <div className="flex items-center justify-center gap-3 mb-8">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-600">
-            <IndianRupee className="h-6 w-6 text-white" />
+    <div className="min-h-screen bg-gradient-to-br from-indigo-50 to-gray-100 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-lg border border-gray-200 w-full max-w-md">
+        {/* Header */}
+        <div className="bg-indigo-900 rounded-t-2xl px-8 py-6 text-center">
+          <div className="flex items-center justify-center gap-2.5 mb-2">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-indigo-500">
+              <IndianRupee className="h-5 w-5 text-white" />
+            </div>
+            <span className="text-lg font-bold text-white">
+              {import.meta.env.VITE_APP_NAME || 'LeavePayroll'}
+            </span>
           </div>
-          <div>
-            <div className="text-lg font-bold text-gray-900 leading-tight">LeavePayroll</div>
-            <div className="text-xs text-gray-500">Indian HR System</div>
-          </div>
+          <p className="text-indigo-300 text-xs">Indian HR System</p>
         </div>
 
-        <div className="bg-white rounded-2xl shadow-lg border border-gray-200 p-8">
-          <div className="mb-6 text-center">
-            <h1 className="text-2xl font-bold text-gray-900">
-              Welcome, {invitation?.full_name}!
+        {/* Body */}
+        <div className="px-8 py-6">
+          <div className="text-center mb-6">
+            <h1 className="text-xl font-bold text-gray-900">
+              Welcome, {invitation?.full_name || invitation?.name || 'there'}!
             </h1>
             <p className="text-sm text-gray-500 mt-1">
               You've been invited to join as{' '}
               <span className="font-medium text-indigo-600 capitalize">
-                {invitation?.role?.replace('_', ' ')}
+                {invitation?.role || 'employee'}
               </span>
               {invitation?.department && (
                 <> in <span className="font-medium">{invitation.department}</span></>
               )}
             </p>
-            <p className="text-xs text-gray-400 mt-1">{invitation?.email}</p>
+            <p className="text-xs text-gray-400 mt-1">
+              Setting up account for <span className="font-medium">{invitation?.email}</span>
+            </p>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-5">
-            {/* Password */}
+          <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                Password <span className="text-red-500">*</span>
+                <Lock className="h-3.5 w-3.5 inline mr-1" />
+                Create Password
               </label>
               <div className="relative">
                 <input
                   type={showPassword ? 'text' : 'password'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Minimum 8 characters"
                   required
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2.5 pr-10 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                  minLength={8}
+                  placeholder="Min. 8 characters"
+                  className="w-full rounded-xl border border-gray-300 px-4 py-3 pr-10 text-sm text-gray-900 placeholder-gray-400 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword((v) => !v)}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  tabIndex={-1}
                 >
                   {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
               </div>
-
-              {/* Strength indicator */}
-              {password && (
-                <div className="mt-2">
-                  <div className="flex gap-1 mb-1">
-                    {[1, 2, 3].map((n) => (
-                      <div
-                        key={n}
-                        className={`h-1.5 flex-1 rounded-full transition-colors ${
-                          strength.level >= n ? strength.color : 'bg-gray-200'
-                        }`}
-                      />
-                    ))}
-                  </div>
-                  <p className="text-xs text-gray-500">
-                    Strength:{' '}
-                    <span
-                      className={
-                        strength.level === 1
-                          ? 'text-red-600'
-                          : strength.level === 2
-                          ? 'text-amber-600'
-                          : 'text-green-600'
-                      }
-                    >
-                      {strength.label}
-                    </span>
-                  </p>
-                </div>
-              )}
+              <PasswordStrengthBar password={password} />
             </div>
 
-            {/* Confirm Password */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                Confirm Password <span className="text-red-500">*</span>
+                Confirm Password
               </label>
               <div className="relative">
                 <input
                   type={showConfirm ? 'text' : 'password'}
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
-                  placeholder="Re-enter your password"
                   required
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2.5 pr-10 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                  placeholder="Re-enter password"
+                  className={`w-full rounded-xl border px-4 py-3 pr-10 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-1 ${
+                    confirmPassword && confirmPassword !== password
+                      ? 'border-red-400 focus:border-red-500 focus:ring-red-500'
+                      : 'border-gray-300 focus:border-indigo-500 focus:ring-indigo-500'
+                  }`}
                 />
                 <button
                   type="button"
                   onClick={() => setShowConfirm((v) => !v)}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  tabIndex={-1}
                 >
                   {showConfirm ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
               </div>
-              {confirmPassword && password !== confirmPassword && (
-                <p className="mt-1 text-xs text-red-600">Passwords do not match.</p>
+              {confirmPassword && confirmPassword !== password && (
+                <p className="text-xs text-red-500 mt-1">Passwords do not match</p>
               )}
             </div>
 
-            {/* Error */}
-            {error && (
-              <div className="flex items-center gap-2 rounded-lg bg-red-50 border border-red-200 px-3 py-2.5 text-sm text-red-700">
-                <AlertCircle className="h-4 w-4 flex-shrink-0" />
-                {error}
-              </div>
-            )}
-
             <button
               type="submit"
-              disabled={submitting}
-              className="w-full flex items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-indigo-700 transition-colors disabled:opacity-60 min-h-[44px]"
+              disabled={submitting || !password || !confirmPassword}
+              className="w-full rounded-xl bg-indigo-600 px-4 py-3 text-sm font-semibold text-white hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 min-h-[48px]"
             >
-              {submitting && <Loader2 className="h-4 w-4 animate-spin" />}
-              {submitting ? 'Creating Account...' : 'Create Account'}
+              {submitting ? (
+                <>
+                  <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  Creating Account…
+                </>
+              ) : (
+                'Create Account & Login'
+              )}
             </button>
           </form>
         </div>
-
-        <p className="text-center text-xs text-gray-400 mt-6">
-          Already have an account?{' '}
-          <button
-            onClick={() => navigate('/login')}
-            className="text-indigo-600 hover:text-indigo-800 font-medium"
-          >
-            Sign in
-          </button>
-        </p>
       </div>
     </div>
   )

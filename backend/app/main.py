@@ -19,6 +19,11 @@ from app.routers import payroll as payroll_router
 from app.routers import reports as report_router
 from app.routers import auth as auth_router
 from app.routers import commission as commission_router
+from app.routers import invitations as invitation_router
+from app.routers import announcements as announcement_router
+from app.routers import expenses as expense_router
+from app.routers import integrations as integration_router
+from app.routers import profile as profile_router
 
 
 # ============================================================
@@ -387,6 +392,40 @@ def seed_commissions(db):
         print("  [seed] Sample commission entries for E001 created.")
 
 
+def seed_announcements(db):
+    from app.models.announcement import Announcement, AnnouncementPriority
+    from app.models.employee import Employee
+
+    if db.query(Announcement).count() > 0:
+        return
+
+    # Find any HR or admin user to be the publisher
+    publisher = (
+        db.query(Employee)
+        .filter(Employee.is_active == True)
+        .order_by(Employee.id)
+        .first()
+    )
+    if not publisher:
+        return
+
+    welcome = Announcement(
+        title="Welcome to LeavePayroll!",
+        content=(
+            "We are pleased to welcome you to the LeavePayroll HR Management System. "
+            "Here you can apply for leaves, view your salary slips, track commissions, "
+            "and submit expense claims. If you have any questions, please reach out to HR."
+        ),
+        priority=AnnouncementPriority.normal,
+        is_active=True,
+        published_by=publisher.id,
+        target_department=None,  # All departments
+    )
+    db.add(welcome)
+    db.commit()
+    print("  [seed] Welcome announcement created.")
+
+
 def run_seed():
     """Run all seed operations."""
     db = SessionLocal()
@@ -396,6 +435,7 @@ def run_seed():
         seed_holidays(db)
         seed_employees(db)
         seed_commissions(db)
+        seed_announcements(db)
         print("[startup] Seed complete.")
     except Exception as e:
         print(f"[startup] Seed error: {e}")
@@ -456,6 +496,11 @@ app.include_router(leave_router.router, prefix=API_PREFIX)
 app.include_router(payroll_router.router, prefix=API_PREFIX)
 app.include_router(report_router.router, prefix=API_PREFIX)
 app.include_router(commission_router.router, prefix=API_PREFIX, tags=["commission"])
+app.include_router(invitation_router.router, prefix=API_PREFIX)
+app.include_router(announcement_router.router, prefix=API_PREFIX)
+app.include_router(expense_router.router, prefix=API_PREFIX)
+app.include_router(integration_router.router, prefix=API_PREFIX)
+app.include_router(profile_router.router, prefix=API_PREFIX)
 
 
 # ============================================================
