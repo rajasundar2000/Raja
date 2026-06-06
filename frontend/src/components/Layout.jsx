@@ -23,7 +23,6 @@ const ALL_NAV = [
   { to: '/employees', label: 'Employees', icon: Users, roles: ['hr', 'super_admin', 'manager'] },
   { to: '/leaves', label: 'Leave Management', icon: Calendar, roles: null },
   { to: '/payroll', label: 'Payroll', icon: DollarSign, roles: ['hr', 'finance', 'super_admin'] },
-  { to: '/commission', label: 'Commission', icon: TrendingUp, roles: null },
   { to: '/expenses', label: 'Expenses', icon: Receipt, roles: null },
   { to: '/reports', label: 'Reports', icon: BarChart2, roles: ['hr', 'super_admin', 'manager', 'finance'] },
   { to: '/settings', label: 'Settings', icon: Settings, roles: ['hr', 'super_admin'] },

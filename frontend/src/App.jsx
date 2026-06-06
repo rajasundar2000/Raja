@@ -10,7 +10,6 @@ import LeaveRequest from './pages/LeaveRequest.jsx'
 import PayrollManagement from './pages/PayrollManagement.jsx'
 import PayrollDetail from './pages/PayrollDetail.jsx'
 import Reports from './pages/Reports.jsx'
-import Commission from './pages/Commission.jsx'
 import AcceptInvite from './pages/AcceptInvite.jsx'
 import Profile from './pages/Profile.jsx'
 import Expenses from './pages/Expenses.jsx'
@@ -69,7 +68,6 @@ export default function App() {
                   }
                 />
 
-                <Route path="/commission" element={<Commission />} />
 
                 <Route path="/profile" element={<Profile />} />
 
