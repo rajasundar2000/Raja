@@ -44,16 +44,21 @@ export const employees = {
 
 // ─── Leaves ───────────────────────────────────────────────────────────────────
 export const leaves = {
-  getTypes: () => api.get('/leaves/types/'),
-  getBalance: (empId) => api.get(`/leaves/balance/${empId}/`),
-  getRequests: (params) => api.get('/leaves/requests/', { params }),
-  createRequest: (data) => api.post('/leaves/requests/', data),
-  submitRequest: (id) => api.post(`/leaves/requests/${id}/submit/`),
-  cancelRequest: (id) => api.post(`/leaves/requests/${id}/cancel/`),
-  approveRequest: (id, action, comments) =>
-    api.post(`/leaves/requests/${id}/${action}/`, { comments }),
-  getHolidays: (params) => api.get('/leaves/holidays/', { params }),
-  getHistory: (empId) => api.get(`/leaves/history/${empId}/`),
+  getTypes: () => api.get('/leave-types'),
+  getBalance: (empId) => api.get(`/employees/${empId}/leave-balance`),
+  getRequests: (params) => api.get('/leave-requests', { params }),
+  createRequest: (data) => api.post('/leave-requests', data),
+  submitRequest: (id) => api.put(`/leave-requests/${id}/submit`),
+  cancelRequest: (id) => api.put(`/leave-requests/${id}/cancel`),
+  approveRequest: (requestId, action, comments, approverId) =>
+    api.post(`/leave-requests/${requestId}/approve`, {
+      leave_request_id: requestId,
+      approver_id: approverId ?? 1,
+      action,
+      comments,
+    }),
+  getHolidays: (params) => api.get('/holidays', { params }),
+  getHistory: (empId) => api.get(`/employees/${empId}/leave-history`),
 }
 
 // ─── Payroll ──────────────────────────────────────────────────────────────────

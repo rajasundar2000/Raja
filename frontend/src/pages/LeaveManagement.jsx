@@ -10,18 +10,19 @@ import {
   ChevronRight,
   RefreshCw,
   Info,
+  Flag,
+  Search,
 } from 'lucide-react'
 import { leaves } from '../api.js'
+import { useAuth } from '../context/AuthContext'
 import LoadingSpinner from '../components/LoadingSpinner.jsx'
 import StatusBadge from '../components/StatusBadge.jsx'
 import Modal from '../components/Modal.jsx'
 import toast from 'react-hot-toast'
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, getDay } from 'date-fns'
 
-const TABS = ['My Leaves', 'Pending Approvals', 'Team Calendar', 'Leave Types']
-
 // ─── Pill Tabs ─────────────────────────────────────────────────────────────────
-function PillTabs({ tabs, active, onChange, badge }) {
+function PillTabs({ tabs, active, onChange, pendingCount }) {
   return (
     <div className="flex bg-white/60 rounded-2xl p-1 gap-1 overflow-x-auto">
       {tabs.map((t, i) => (
@@ -35,11 +36,11 @@ function PillTabs({ tabs, active, onChange, badge }) {
           }`}
         >
           {t}
-          {i === 1 && badge > 0 && (
+          {t === 'Pending Approvals' && pendingCount > 0 && (
             <span className={`text-xs rounded-full px-1.5 py-0.5 font-bold ${
-              active === 1 ? 'bg-white/20 text-white' : 'bg-amber-100 text-amber-700'
+              active === i ? 'bg-white/20 text-white' : 'bg-amber-100 text-amber-700'
             }`}>
-              {badge}
+              {pendingCount}
             </span>
           )}
         </button>
@@ -48,9 +49,12 @@ function PillTabs({ tabs, active, onChange, badge }) {
   )
 }
 
-// ─── Avatar initials ───────────────────────────────────────────────────────────
+// ─── Avatar ────────────────────────────────────────────────────────────────────
 function Avatar({ name }) {
-  const initials = (name ?? '?').split(' ').map((p) => p[0]).join('').slice(0, 2).toUpperCase()
+  const parts = (name ?? '?').trim().split(' ').filter(Boolean)
+  const initials = parts.length >= 2
+    ? (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+    : (name ?? '?').slice(0, 2).toUpperCase()
   return (
     <div className="h-9 w-9 rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
       {initials}
@@ -58,8 +62,34 @@ function Avatar({ name }) {
   )
 }
 
+// ─── Static US Holidays 2025 ───────────────────────────────────────────────────
+const US_HOLIDAYS_2025 = [
+  { date: '2025-01-01', name: "New Year's Day", type: 'Federal' },
+  { date: '2025-01-20', name: 'Martin Luther King Jr. Day', type: 'Federal' },
+  { date: '2025-02-17', name: "Presidents' Day", type: 'Federal' },
+  { date: '2025-05-26', name: 'Memorial Day', type: 'Federal' },
+  { date: '2025-06-19', name: 'Juneteenth', type: 'Federal' },
+  { date: '2025-07-04', name: 'Independence Day', type: 'Federal' },
+  { date: '2025-09-01', name: 'Labor Day', type: 'Federal' },
+  { date: '2025-10-13', name: 'Columbus Day', type: 'Federal' },
+  { date: '2025-11-11', name: 'Veterans Day', type: 'Federal' },
+  { date: '2025-11-27', name: 'Thanksgiving Day', type: 'Federal' },
+  { date: '2025-11-28', name: 'Day after Thanksgiving', type: 'Observed' },
+  { date: '2025-12-24', name: 'Christmas Eve (Observed)', type: 'Observed' },
+  { date: '2025-12-25', name: 'Christmas Day', type: 'Federal' },
+  { date: '2025-12-31', name: "New Year's Eve (Observed)", type: 'Observed' },
+]
+
 export default function LeaveManagement() {
   const navigate = useNavigate()
+  const { user } = useAuth()
+  const isSuperAdmin = user?.role === 'super_admin'
+
+  // Super admin skips "My Leaves" — starts on Pending Approvals
+  const TABS = isSuperAdmin
+    ? ['Pending Approvals', 'Team Calendar', 'US Holidays', 'Leave Types']
+    : ['My Leaves', 'Pending Approvals', 'Team Calendar', 'US Holidays', 'Leave Types']
+
   const [tab, setTab] = useState(0)
   const [loading, setLoading] = useState(true)
   const [myLeaves, setMyLeaves] = useState([])
@@ -67,58 +97,67 @@ export default function LeaveManagement() {
   const [leaveTypes, setLeaveTypes] = useState([])
   const [allLeaves, setAllLeaves] = useState([])
   const [holidays, setHolidays] = useState([])
+
+  // Filters
   const [filterStatus, setFilterStatus] = useState('')
   const [filterType, setFilterType] = useState('')
   const [filterFrom, setFilterFrom] = useState('')
   const [filterTo, setFilterTo] = useState('')
+  const [filterEmployee, setFilterEmployee] = useState('')
+  const [showFilters, setShowFilters] = useState(false)
+
+  // Approval modal
   const [approveModal, setApproveModal] = useState(null)
   const [approveComments, setApproveComments] = useState('')
   const [actionLoading, setActionLoading] = useState(false)
-  const [showFilters, setShowFilters] = useState(false)
 
   const fetchData = useCallback(async () => {
     setLoading(true)
     try {
       const params = {}
       if (filterStatus) params.status = filterStatus
-      if (filterType) params.leave_type = filterType
+      if (filterType) params.leave_type_id = filterType
       if (filterFrom) params.from_date = filterFrom
       if (filterTo) params.to_date = filterTo
 
       const [myRes, pendRes, typeRes, allRes, holRes] = await Promise.allSettled([
-        leaves.getRequests({ ...params, employee_id: 'E001', page_size: 50 }),
-        leaves.getRequests({ status: 'submitted', page_size: 50 }),
+        // My leaves: filter by logged-in employee's numeric id
+        leaves.getRequests({ ...params, employee_id: user?.id, limit: 50 }),
+        // Pending approvals: all submitted requests
+        leaves.getRequests({ status: 'submitted', limit: 100 }),
         leaves.getTypes(),
-        leaves.getRequests({ ...params, page_size: 100 }),
+        // All leaves for team calendar
+        leaves.getRequests({ ...params, limit: 200 }),
+        // Holidays (both countries)
         leaves.getHolidays({ year: new Date().getFullYear() }),
       ])
 
       if (myRes.status === 'fulfilled') {
         const d = myRes.value.data
-        setMyLeaves(d.results ?? d.data ?? (Array.isArray(d) ? d : []))
+        setMyLeaves(d.items ?? d.results ?? d.data ?? (Array.isArray(d) ? d : []))
       }
       if (pendRes.status === 'fulfilled') {
         const d = pendRes.value.data
-        setPendingLeaves(d.results ?? d.data ?? (Array.isArray(d) ? d : []))
+        setPendingLeaves(d.items ?? d.results ?? d.data ?? (Array.isArray(d) ? d : []))
       }
       if (typeRes.status === 'fulfilled') {
         const d = typeRes.value.data
-        setLeaveTypes(d.results ?? d.data ?? (Array.isArray(d) ? d : []))
+        setLeaveTypes(d.items ?? d.results ?? d.data ?? (Array.isArray(d) ? d : []))
       }
       if (allRes.status === 'fulfilled') {
         const d = allRes.value.data
-        setAllLeaves(d.results ?? d.data ?? (Array.isArray(d) ? d : []))
+        setAllLeaves(d.items ?? d.results ?? d.data ?? (Array.isArray(d) ? d : []))
       }
       if (holRes.status === 'fulfilled') {
         const d = holRes.value.data
-        setHolidays(d.results ?? d.data ?? (Array.isArray(d) ? d : []))
+        setHolidays(d.items ?? d.results ?? d.data ?? (Array.isArray(d) ? d : []))
       }
     } catch {
       toast.error('Failed to load leave data')
     } finally {
       setLoading(false)
     }
-  }, [filterStatus, filterType, filterFrom, filterTo])
+  }, [filterStatus, filterType, filterFrom, filterTo, user?.id])
 
   useEffect(() => { fetchData() }, [fetchData])
 
@@ -126,8 +165,10 @@ export default function LeaveManagement() {
     if (!approveModal) return
     setActionLoading(true)
     try {
-      await leaves.approveRequest(approveModal.id, action, approveComments)
-      toast.success(`Leave ${action}d successfully!`)
+      // Map 'approve'/'reject' to backend enum values 'approved'/'rejected'
+      const backendAction = action === 'approve' ? 'approved' : 'rejected'
+      await leaves.approveRequest(approveModal.id, backendAction, approveComments, user?.id)
+      toast.success(`Leave ${backendAction} successfully!`)
       setApproveModal(null)
       setApproveComments('')
       fetchData()
@@ -149,7 +190,20 @@ export default function LeaveManagement() {
     }
   }
 
-  const hasFilters = filterStatus || filterType || filterFrom || filterTo
+  // Filter pending leaves by employee name/id
+  const filteredPending = filterEmployee
+    ? pendingLeaves.filter((r) =>
+        (r.employee_name ?? '').toLowerCase().includes(filterEmployee.toLowerCase()) ||
+        (r.employee_id ?? '').toString().includes(filterEmployee)
+      )
+    : pendingLeaves
+
+  const hasFilters = filterStatus || filterType || filterFrom || filterTo || filterEmployee
+
+  // Derive unique employee names for the employee filter dropdown
+  const employeeOptions = [...new Set(
+    pendingLeaves.map((r) => r.employee_name).filter(Boolean)
+  )].sort()
 
   return (
     <div className="animate-fade-in-up space-y-5">
@@ -157,7 +211,9 @@ export default function LeaveManagement() {
       <div className="flex items-center justify-between animate-stagger-1">
         <div>
           <h1 className="text-2xl font-black text-slate-900">Leave Management</h1>
-          <p className="text-sm text-slate-500 mt-0.5">Manage employee leaves and approvals</p>
+          <p className="text-sm text-slate-500 mt-0.5">
+            {isSuperAdmin ? 'Approve requests and manage team leave' : 'Manage employee leaves and approvals'}
+          </p>
         </div>
         <div className="flex gap-2">
           <button
@@ -168,13 +224,13 @@ export default function LeaveManagement() {
             <span className="hidden sm:inline">Filters</span>
             {hasFilters && <span className="h-2 w-2 bg-indigo-500 rounded-full" />}
           </button>
-          <button
-            onClick={() => navigate('/leaves/request')}
-            className="btn-primary"
-          >
-            <Plus className="h-4 w-4" />
-            Apply Leave
-          </button>
+          {/* Hide Apply Leave for super_admin */}
+          {!isSuperAdmin && (
+            <button onClick={() => navigate('/leaves/request')} className="btn-primary">
+              <Plus className="h-4 w-4" />
+              Apply Leave
+            </button>
+          )}
         </div>
       </div>
 
@@ -182,10 +238,21 @@ export default function LeaveManagement() {
       {showFilters && (
         <div className="glass-card p-4 animate-fade-in-up">
           <div className="flex flex-wrap gap-3 items-center">
+            {/* Employee filter — useful for admins in pending approvals */}
+            <div className="relative flex-1 min-w-40">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Filter by employee…"
+                value={filterEmployee}
+                onChange={(e) => setFilterEmployee(e.target.value)}
+                className="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-200 bg-white text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              />
+            </div>
             <select
               value={filterStatus}
               onChange={(e) => setFilterStatus(e.target.value)}
-              className="input-glass flex-1 min-w-32"
+              className="flex-1 min-w-32 px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
             >
               <option value="">All Statuses</option>
               {['draft', 'submitted', 'approved', 'rejected', 'cancelled'].map((s) => (
@@ -195,30 +262,30 @@ export default function LeaveManagement() {
             <select
               value={filterType}
               onChange={(e) => setFilterType(e.target.value)}
-              className="input-glass flex-1 min-w-32"
+              className="flex-1 min-w-32 px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
             >
               <option value="">All Leave Types</option>
               {leaveTypes.map((t) => (
-                <option key={t.id} value={t.id}>{t.name ?? t.leave_type_name}</option>
+                <option key={t.id} value={t.id}>{t.name}</option>
               ))}
             </select>
             <input
               type="date"
               value={filterFrom}
               onChange={(e) => setFilterFrom(e.target.value)}
-              className="input-glass flex-1 min-w-32"
+              className="flex-1 min-w-32 px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
             />
             <input
               type="date"
               value={filterTo}
               onChange={(e) => setFilterTo(e.target.value)}
-              className="input-glass flex-1 min-w-32"
+              className="flex-1 min-w-32 px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
             />
             <button
-              onClick={() => { setFilterStatus(''); setFilterType(''); setFilterFrom(''); setFilterTo('') }}
-              className="text-sm text-red-500 hover:text-red-700 font-medium"
+              onClick={() => { setFilterStatus(''); setFilterType(''); setFilterFrom(''); setFilterTo(''); setFilterEmployee('') }}
+              className="text-sm text-red-500 hover:text-red-700 font-medium whitespace-nowrap"
             >
-              Clear
+              Clear All
             </button>
             <button onClick={fetchData} className="btn-glass">
               <RefreshCw className="h-3.5 w-3.5" /> Refresh
@@ -229,7 +296,7 @@ export default function LeaveManagement() {
 
       {/* ── Pill Tabs ── */}
       <div className="animate-stagger-2">
-        <PillTabs tabs={TABS} active={tab} onChange={setTab} badge={pendingLeaves.length} />
+        <PillTabs tabs={TABS} active={tab} onChange={setTab} pendingCount={pendingLeaves.length} />
       </div>
 
       {/* ── Tab Content ── */}
@@ -239,7 +306,8 @@ export default function LeaveManagement() {
         </div>
       ) : (
         <div className="animate-stagger-3">
-          {tab === 0 && (
+          {/* My Leaves — only for non-super_admin */}
+          {!isSuperAdmin && tab === 0 && (
             <LeaveTable
               rows={myLeaves}
               onApprove={(r) => { setApproveModal(r); setApproveComments('') }}
@@ -247,45 +315,57 @@ export default function LeaveManagement() {
               showApproveBtn={false}
             />
           )}
-          {tab === 1 && (
+
+          {/* Pending Approvals */}
+          {TABS[tab] === 'Pending Approvals' && (
             <PendingApprovalCards
-              rows={pendingLeaves}
+              rows={filteredPending}
+              employeeOptions={employeeOptions}
+              filterEmployee={filterEmployee}
+              onFilterEmployee={setFilterEmployee}
               onApprove={(r) => { setApproveModal(r); setApproveComments('') }}
-              onCancel={handleCancel}
+              onReject={(r) => {
+                setApproveModal({ ...r, _action: 'reject' })
+                setApproveComments('')
+              }}
             />
           )}
-          {tab === 2 && (
+
+          {/* Team Calendar */}
+          {TABS[tab] === 'Team Calendar' && (
             <TeamCalendar leaves={allLeaves} holidays={holidays} />
           )}
-          {tab === 3 && (
+
+          {/* US Holidays */}
+          {TABS[tab] === 'US Holidays' && (
+            <USHolidaysTab dbHolidays={holidays} />
+          )}
+
+          {/* Leave Types */}
+          {TABS[tab] === 'Leave Types' && (
             <LeaveTypesTab leaveTypes={leaveTypes} />
           )}
         </div>
       )}
 
       {/* ── Approve/Reject Modal ── */}
-      <Modal
-        open={!!approveModal}
-        onClose={() => setApproveModal(null)}
-        title="Leave Approval"
-        size="sm"
-      >
+      <Modal open={!!approveModal} onClose={() => setApproveModal(null)} title="Leave Approval" size="sm">
         {approveModal && (
           <div className="space-y-4">
             <div className="rounded-2xl bg-slate-50 p-4 text-sm space-y-2">
               {[
                 ['Employee', approveModal.employee_name ?? approveModal.employee_id],
                 ['Leave Type', approveModal.leave_type_name ?? approveModal.leave_type],
-                ['Duration', `${approveModal.from_date ?? approveModal.start_date} → ${approveModal.to_date ?? approveModal.end_date}`],
-                ['Working Days', approveModal.working_days ?? approveModal.days],
+                ['Duration', `${approveModal.from_date} → ${approveModal.to_date}`],
+                ['Working Days', approveModal.working_days ?? approveModal.days ?? '—'],
               ].map(([k, v]) => (
                 <div key={k} className="flex justify-between">
                   <span className="text-slate-500">{k}</span>
-                  <span className="font-semibold text-slate-800">{v}</span>
+                  <span className="font-semibold text-slate-800">{v ?? '—'}</span>
                 </div>
               ))}
               {approveModal.reason && (
-                <div>
+                <div className="pt-2 border-t border-slate-200">
                   <span className="text-slate-500 block mb-1">Reason:</span>
                   <span className="text-slate-800">{approveModal.reason}</span>
                 </div>
@@ -300,7 +380,7 @@ export default function LeaveManagement() {
                 value={approveComments}
                 onChange={(e) => setApproveComments(e.target.value)}
                 rows={3}
-                className="input-glass resize-none"
+                className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
                 placeholder="Add remarks…"
               />
             </div>
@@ -346,7 +426,6 @@ function LeaveTable({ rows, onApprove, onCancel, showApproveBtn }) {
         <table className="w-full text-sm">
           <thead className="bg-slate-50/50 text-xs text-slate-500 uppercase tracking-wider">
             <tr>
-              <th className="px-5 py-3 text-left">Employee</th>
               <th className="px-5 py-3 text-left">Leave Type</th>
               <th className="px-5 py-3 text-left">From</th>
               <th className="px-5 py-3 text-left">To</th>
@@ -359,34 +438,19 @@ function LeaveTable({ rows, onApprove, onCancel, showApproveBtn }) {
           <tbody>
             {rows.map((r, i) => (
               <tr key={r.id ?? i} className={`hover:bg-indigo-50/30 transition-colors ${i !== rows.length - 1 ? 'border-b border-slate-100' : ''}`}>
-                <td className="px-5 py-3 font-semibold text-slate-900">
-                  {r.employee_name ?? r.employee_id ?? '—'}
-                </td>
-                <td className="px-5 py-3 text-slate-600">{r.leave_type_name ?? r.leave_type ?? '—'}</td>
-                <td className="px-5 py-3 text-slate-600">{r.from_date ?? r.start_date ?? '—'}</td>
-                <td className="px-5 py-3 text-slate-600">{r.to_date ?? r.end_date ?? '—'}</td>
+                <td className="px-5 py-3 text-slate-700 font-medium">{r.leave_type_name ?? r.leave_type ?? '—'}</td>
+                <td className="px-5 py-3 text-slate-600">{r.from_date ?? '—'}</td>
+                <td className="px-5 py-3 text-slate-600">{r.to_date ?? '—'}</td>
                 <td className="px-5 py-3 text-slate-600">{r.working_days ?? r.days ?? '—'}</td>
                 <td className="px-5 py-3"><StatusBadge status={r.status} /></td>
-                <td className="px-5 py-3 text-slate-400 text-xs">
-                  {r.applied_on ?? r.created_at?.split('T')[0] ?? '—'}
-                </td>
+                <td className="px-5 py-3 text-slate-400 text-xs">{r.created_at?.split('T')[0] ?? '—'}</td>
                 <td className="px-5 py-3 text-right">
                   <div className="flex items-center justify-end gap-2">
                     {showApproveBtn && r.status === 'submitted' && (
-                      <button
-                        onClick={() => onApprove(r)}
-                        className="text-xs text-emerald-600 hover:underline font-semibold"
-                      >
-                        Review
-                      </button>
+                      <button onClick={() => onApprove(r)} className="text-xs text-emerald-600 hover:underline font-semibold">Review</button>
                     )}
                     {['draft', 'submitted'].includes(r.status) && (
-                      <button
-                        onClick={() => onCancel(r.id)}
-                        className="text-xs text-red-500 hover:underline font-semibold"
-                      >
-                        Cancel
-                      </button>
+                      <button onClick={() => onCancel(r.id)} className="text-xs text-red-500 hover:underline font-semibold">Cancel</button>
                     )}
                   </div>
                 </td>
@@ -399,52 +463,83 @@ function LeaveTable({ rows, onApprove, onCancel, showApproveBtn }) {
   )
 }
 
-// ─── Pending Approvals as Cards ────────────────────────────────────────────────
-function PendingApprovalCards({ rows, onApprove, onCancel }) {
-  if (rows.length === 0) {
-    return (
-      <div className="glass-card text-center py-16 text-slate-400">
-        <Calendar className="h-10 w-10 mx-auto mb-3 text-slate-300" />
-        <p className="text-sm">No pending approvals</p>
-      </div>
-    )
-  }
-
+// ─── Pending Approvals ─────────────────────────────────────────────────────────
+function PendingApprovalCards({ rows, employeeOptions, filterEmployee, onFilterEmployee, onApprove, onReject }) {
   return (
-    <div className="space-y-3">
-      {rows.map((r, i) => (
-        <div key={r.id ?? i} className="glass-card p-4 flex items-center gap-4">
-          <div className="h-10 w-10 rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
-            {(r.employee_name ?? r.employee_id ?? '?').split(' ').map((p) => p[0]).join('').slice(0, 2).toUpperCase()}
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <p className="font-semibold text-slate-900">{r.employee_name ?? r.employee_id ?? '—'}</p>
-              <StatusBadge status={r.status} />
-            </div>
-            <p className="text-xs text-slate-500 mt-0.5">
-              {r.leave_type_name ?? r.leave_type ?? '—'} &bull;{' '}
-              {r.from_date ?? r.start_date ?? '—'} → {r.to_date ?? r.end_date ?? '—'} &bull;{' '}
-              {r.working_days ?? r.days ?? '—'} days
-            </p>
-            {r.reason && <p className="text-xs text-slate-400 mt-0.5 truncate">{r.reason}</p>}
-          </div>
-          <div className="flex gap-2 flex-shrink-0">
-            <button
-              onClick={() => onCancel(r.id)}
-              className="flex items-center gap-1 rounded-xl border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-100 transition-colors"
-            >
-              <X className="h-3.5 w-3.5" /> Reject
-            </button>
-            <button
-              onClick={() => onApprove(r)}
-              className="flex items-center gap-1 rounded-xl bg-emerald-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-600 transition-colors"
-            >
-              <Check className="h-3.5 w-3.5" /> Approve
-            </button>
-          </div>
+    <div className="space-y-4">
+      {/* Employee search bar */}
+      <div className="flex items-center gap-3">
+        <div className="relative flex-1 max-w-xs">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+          <input
+            type="text"
+            placeholder="Filter by employee name…"
+            value={filterEmployee}
+            onChange={(e) => onFilterEmployee(e.target.value)}
+            className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          />
         </div>
-      ))}
+        {employeeOptions.length > 0 && (
+          <select
+            value={filterEmployee}
+            onChange={(e) => onFilterEmployee(e.target.value)}
+            className="px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          >
+            <option value="">All Employees</option>
+            {employeeOptions.map((name) => (
+              <option key={name} value={name}>{name}</option>
+            ))}
+          </select>
+        )}
+        <span className="text-sm text-slate-500 font-medium">
+          {rows.length} request{rows.length !== 1 ? 's' : ''}
+        </span>
+      </div>
+
+      {rows.length === 0 ? (
+        <div className="glass-card text-center py-16 text-slate-400">
+          <Calendar className="h-10 w-10 mx-auto mb-3 text-slate-300" />
+          <p className="text-sm font-medium">No pending approvals</p>
+          <p className="text-xs mt-1">All leave requests have been reviewed</p>
+        </div>
+      ) : (
+        rows.map((r, i) => (
+          <div key={r.id ?? i} className="glass-card p-4">
+            <div className="flex items-start gap-4">
+              <Avatar name={r.employee_name ?? r.employee_id ?? '?'} />
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap mb-1">
+                  <p className="font-bold text-slate-900">{r.employee_name ?? r.employee_id ?? '—'}</p>
+                  <StatusBadge status={r.status} />
+                  <span className="text-xs text-slate-400">{r.created_at?.split('T')[0]}</span>
+                </div>
+                <div className="flex flex-wrap gap-3 text-sm text-slate-600">
+                  <span className="font-medium text-indigo-700">{r.leave_type_name ?? r.leave_type ?? '—'}</span>
+                  <span>{r.from_date} → {r.to_date}</span>
+                  <span className="font-semibold">{r.working_days ?? r.days ?? '?'} days</span>
+                </div>
+                {r.reason && (
+                  <p className="text-xs text-slate-400 mt-1.5 italic">"{r.reason}"</p>
+                )}
+              </div>
+              <div className="flex gap-2 flex-shrink-0">
+                <button
+                  onClick={() => onReject(r)}
+                  className="flex items-center gap-1 rounded-xl border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-100 transition-colors"
+                >
+                  <X className="h-3.5 w-3.5" /> Reject
+                </button>
+                <button
+                  onClick={() => onApprove(r)}
+                  className="flex items-center gap-1 rounded-xl bg-emerald-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-600 transition-colors"
+                >
+                  <Check className="h-3.5 w-3.5" /> Approve
+                </button>
+              </div>
+            </div>
+          </div>
+        ))
+      )}
     </div>
   )
 }
@@ -456,11 +551,12 @@ function TeamCalendar({ leaves, holidays }) {
   const monthStart = startOfMonth(currentMonth)
   const monthEnd = endOfMonth(currentMonth)
   const days = eachDayOfInterval({ start: monthStart, end: monthEnd })
-  const holidayDates = new Set(holidays.map((h) => h.date).filter(Boolean))
+  const holidayMap = {}
+  holidays.forEach((h) => { if (h.date) holidayMap[h.date] = h.name })
 
   const leaveDates = {}
   leaves.forEach((leave) => {
-    const from = leave.from_date ?? leave.start_date
+    const from = leave.from_date
     const empName = leave.employee_name ?? leave.employee_id ?? 'Employee'
     if (!from) return
     if (!leaveDates[from]) leaveDates[from] = []
@@ -471,45 +567,33 @@ function TeamCalendar({ leaves, holidays }) {
 
   return (
     <div className="glass-card p-5">
-      {/* Calendar header */}
       <div className="flex items-center justify-between mb-5">
-        <button
-          onClick={() => setCurrentMonth((d) => new Date(d.getFullYear(), d.getMonth() - 1, 1))}
-          className="btn-glass p-2"
-        >
+        <button onClick={() => setCurrentMonth((d) => new Date(d.getFullYear(), d.getMonth() - 1, 1))} className="btn-glass p-2">
           <ChevronLeft className="h-4 w-4 text-slate-600" />
         </button>
-        <h2 className="text-xl font-bold text-slate-900">
-          {format(currentMonth, 'MMMM yyyy')}
-        </h2>
-        <button
-          onClick={() => setCurrentMonth((d) => new Date(d.getFullYear(), d.getMonth() + 1, 1))}
-          className="btn-glass p-2"
-        >
+        <h2 className="text-xl font-bold text-slate-900">{format(currentMonth, 'MMMM yyyy')}</h2>
+        <button onClick={() => setCurrentMonth((d) => new Date(d.getFullYear(), d.getMonth() + 1, 1))} className="btn-glass p-2">
           <ChevronRight className="h-4 w-4 text-slate-600" />
         </button>
       </div>
 
-      {/* Legend */}
       <div className="flex gap-4 mb-4 text-xs text-slate-500">
         <div className="flex items-center gap-1.5"><div className="h-3 w-3 rounded bg-red-100 border border-red-300" /> Holiday</div>
-        <div className="flex items-center gap-1.5"><div className="h-3 w-3 rounded bg-amber-100 border border-amber-300" /> Leave Pending</div>
-        <div className="flex items-center gap-1.5"><div className="h-3 w-3 rounded bg-emerald-100 border border-emerald-300" /> Leave Approved</div>
+        <div className="flex items-center gap-1.5"><div className="h-3 w-3 rounded bg-amber-100 border border-amber-300" /> Pending</div>
+        <div className="flex items-center gap-1.5"><div className="h-3 w-3 rounded bg-emerald-100 border border-emerald-300" /> Approved</div>
       </div>
 
-      {/* Day headers */}
       <div className="grid grid-cols-7 gap-1 mb-1">
         {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d) => (
           <div key={d} className="text-center text-xs font-bold text-slate-400 py-1">{d}</div>
         ))}
       </div>
 
-      {/* Days grid */}
       <div className="grid grid-cols-7 gap-1">
         {Array.from({ length: startDow }).map((_, i) => <div key={`empty-${i}`} />)}
         {days.map((day) => {
           const dateStr = format(day, 'yyyy-MM-dd')
-          const isHoliday = holidayDates.has(dateStr)
+          const holiday = holidayMap[dateStr]
           const dayLeaves = leaveDates[dateStr] ?? []
           const isWeekend = getDay(day) === 0 || getDay(day) === 6
           const isToday = dateStr === format(new Date(), 'yyyy-MM-dd')
@@ -518,32 +602,22 @@ function TeamCalendar({ leaves, holidays }) {
             <div
               key={dateStr}
               className={`min-h-16 rounded-xl p-1.5 text-xs border transition-colors ${
-                isHoliday
-                  ? 'bg-red-50 border-red-200'
-                  : isWeekend
-                  ? 'bg-slate-50/80 border-slate-100'
-                  : dayLeaves.length > 0
-                  ? 'bg-indigo-50 border-indigo-200'
+                holiday ? 'bg-red-50 border-red-200'
+                  : isWeekend ? 'bg-slate-50/80 border-slate-100'
+                  : dayLeaves.length > 0 ? 'bg-indigo-50 border-indigo-200'
                   : 'bg-white/40 border-slate-100 hover:bg-white/60'
               } ${isToday ? 'ring-2 ring-indigo-400' : ''}`}
             >
               <div className={`font-bold mb-1 ${isToday ? 'text-indigo-600' : isWeekend ? 'text-slate-400' : 'text-slate-700'}`}>
                 {format(day, 'd')}
               </div>
-              {isHoliday && <div className="text-red-600 truncate text-xs leading-tight">Holiday</div>}
+              {holiday && <div className="text-red-600 truncate text-xs leading-tight">{holiday.split(' ')[0]}</div>}
               {dayLeaves.slice(0, 2).map((l, i) => (
-                <div
-                  key={i}
-                  className={`truncate rounded-md px-1 text-xs leading-tight mb-0.5 ${
-                    l.status === 'approved' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
-                  }`}
-                >
+                <div key={i} className={`truncate rounded-md px-1 text-xs leading-tight mb-0.5 ${l.status === 'approved' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
                   {l.name.split(' ')[0]}
                 </div>
               ))}
-              {dayLeaves.length > 2 && (
-                <div className="text-slate-400 text-xs">+{dayLeaves.length - 2}</div>
-              )}
+              {dayLeaves.length > 2 && <div className="text-slate-400 text-xs">+{dayLeaves.length - 2}</div>}
             </div>
           )
         })}
@@ -552,7 +626,82 @@ function TeamCalendar({ leaves, holidays }) {
   )
 }
 
-// ─── Leave Types ───────────────────────────────────────────────────────────────
+// ─── US Holidays Tab ───────────────────────────────────────────────────────────
+function USHolidaysTab({ dbHolidays }) {
+  const year = new Date().getFullYear()
+  // Use static list + merge any from DB
+  const dbUS = dbHolidays.filter((h) => h.country === 'us' || h.holiday_type === 'us')
+  const dbDates = new Set(dbUS.map((h) => h.date))
+  const staticList = US_HOLIDAYS_2025.filter((h) => !dbDates.has(h.date))
+  const allUS = [
+    ...dbUS.map((h) => ({ date: h.date, name: h.name, type: 'Federal' })),
+    ...staticList,
+  ].sort((a, b) => a.date.localeCompare(b.date))
+
+  const today = format(new Date(), 'yyyy-MM-dd')
+  const upcoming = allUS.filter((h) => h.date >= today)
+  const past = allUS.filter((h) => h.date < today)
+
+  function HolidayRow({ h }) {
+    const isPast = h.date < today
+    const isToday = h.date === today
+    const d = new Date(h.date + 'T00:00:00')
+    return (
+      <div className={`flex items-center gap-4 p-3 rounded-xl border transition-colors ${
+        isToday ? 'bg-indigo-50 border-indigo-200'
+        : isPast ? 'bg-white/30 border-slate-100 opacity-60'
+        : 'bg-white/60 border-white/50 hover:bg-white/80'
+      }`}>
+        <div className={`flex-shrink-0 text-center w-12 ${isToday ? 'text-indigo-600' : isPast ? 'text-slate-400' : 'text-slate-700'}`}>
+          <div className="text-xs font-bold uppercase">{format(d, 'MMM')}</div>
+          <div className="text-2xl font-black leading-none">{format(d, 'd')}</div>
+          <div className="text-xs text-slate-400">{format(d, 'EEE')}</div>
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className={`font-semibold text-sm ${isToday ? 'text-indigo-700' : 'text-slate-800'}`}>{h.name}</p>
+          <p className="text-xs text-slate-400">{h.type} Holiday{isToday ? ' — Today!' : ''}</p>
+        </div>
+        <Flag className={`h-4 w-4 flex-shrink-0 ${isToday ? 'text-indigo-400' : 'text-slate-300'}`} />
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-5">
+      <div className="glass-card p-5">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-blue-500 to-red-500 flex items-center justify-center flex-shrink-0">
+            <Flag className="h-5 w-5 text-white" />
+          </div>
+          <div>
+            <h2 className="text-lg font-bold text-slate-900">US Public Holidays {year}</h2>
+            <p className="text-xs text-slate-500">{upcoming.length} upcoming · {past.length} passed</p>
+          </div>
+        </div>
+
+        {upcoming.length > 0 && (
+          <div className="space-y-2 mb-4">
+            <p className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-2">Upcoming</p>
+            {upcoming.map((h) => <HolidayRow key={h.date} h={h} />)}
+          </div>
+        )}
+
+        {past.length > 0 && (
+          <details className="group">
+            <summary className="text-xs font-bold uppercase tracking-widest text-slate-400 cursor-pointer select-none hover:text-slate-600 mb-2">
+              Past Holidays ({past.length})
+            </summary>
+            <div className="space-y-2 mt-2">
+              {past.map((h) => <HolidayRow key={h.date} h={h} />)}
+            </div>
+          </details>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ─── Leave Types Tab ───────────────────────────────────────────────────────────
 function LeaveTypesTab({ leaveTypes }) {
   if (leaveTypes.length === 0) {
     return (
@@ -568,31 +717,26 @@ function LeaveTypesTab({ leaveTypes }) {
       {leaveTypes.map((t, i) => (
         <div key={t.id ?? i} className="glass-card p-5">
           <div className="flex items-center justify-between mb-3">
-            <h3 className="text-xl font-bold text-slate-900">{t.name ?? t.leave_type_name}</h3>
+            <h3 className="text-xl font-bold text-slate-900">{t.name}</h3>
             <StatusBadge status={t.is_active ? 'active' : 'inactive'} />
           </div>
           <div className="flex items-end gap-2 mb-3">
-            <span className="stat-number text-indigo-600 text-3xl">{t.annual_allotment ?? t.max_days ?? '—'}</span>
+            <span className="text-3xl font-black text-indigo-600">{t.annual_entitlement ?? t.max_days ?? '—'}</span>
             <span className="text-slate-500 text-sm mb-1">days/year</span>
           </div>
           <div className="space-y-1.5 text-xs">
             {[
-              ['Carry Forward', t.carry_forward ? 'Yes' : 'No'],
+              ['Carry Forward', t.max_carry_forward > 0 ? `Up to ${t.max_carry_forward} days` : 'No'],
               ['Paid Leave', t.is_paid !== false ? 'Yes' : 'No'],
               ['Encashable', t.is_encashable ? 'Yes' : 'No'],
             ].map(([k, v]) => (
               <div key={k} className="flex justify-between text-slate-500">
                 <span>{k}</span>
-                <span className={`font-semibold ${v === 'Yes' ? 'text-emerald-600' : 'text-slate-400'}`}>{v}</span>
+                <span className={`font-semibold ${v === 'No' ? 'text-slate-400' : 'text-emerald-600'}`}>{v}</span>
               </div>
             ))}
-            {t.is_encashable && (
-              <span className="inline-block mt-2 bg-amber-100 text-amber-700 rounded-full px-2 py-0.5 text-xs font-semibold">
-                Encashable
-              </span>
-            )}
             {t.description && (
-              <p className="text-slate-400 mt-2 pt-2 border-t border-slate-100">{t.description}</p>
+              <p className="text-slate-400 mt-2 pt-2 border-t border-slate-100 leading-relaxed">{t.description}</p>
             )}
           </div>
         </div>
