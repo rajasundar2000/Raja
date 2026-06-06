@@ -19,7 +19,7 @@ import { useAuth } from '../context/AuthContext'
 
 const ALL_NAV = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, exact: true, roles: null },
-  { to: '/employees', label: 'Employees', icon: Users, roles: ['hr', 'super_admin', 'manager'] },
+  { to: '/employees', label: 'Employees', icon: Users, roles: ['hr', 'super_admin'] },
   { to: '/leaves', label: 'Leave Management', icon: Calendar, roles: null },
   { to: '/payroll', label: 'Payroll', icon: DollarSign, roles: ['hr', 'finance', 'super_admin'] },
   { to: '/expenses', label: 'Expenses', icon: Receipt, roles: null },
