@@ -8,12 +8,16 @@ import {
   Building2,
   RefreshCw,
   UserPlus,
+  KeyRound,
 } from 'lucide-react'
+import axios from 'axios'
 import { employees } from '../api.js'
 import LoadingSpinner from '../components/LoadingSpinner.jsx'
 import StatusBadge from '../components/StatusBadge.jsx'
 import Modal from '../components/Modal.jsx'
 import toast from 'react-hot-toast'
+
+const API_URL = import.meta.env.VITE_API_URL || 'https://elite-recruit-payroll-system.onrender.com/api'
 
 const PAGE_SIZE = 10
 
@@ -56,6 +60,51 @@ export default function EmployeeList() {
   const [showModal, setShowModal] = useState(false)
   const [form, setForm] = useState(EMPTY_FORM)
   const [saving, setSaving] = useState(false)
+
+  // Reset password state
+  const [resetPasswordModal, setResetPasswordModal] = useState(false)
+  const [resetTargetEmp, setResetTargetEmp] = useState(null)
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [resettingPassword, setResettingPassword] = useState(false)
+
+  function openResetPassword(emp, e) {
+    e.stopPropagation()
+    setResetTargetEmp(emp)
+    setNewPassword('')
+    setConfirmPassword('')
+    setResetPasswordModal(true)
+  }
+
+  async function handleResetPassword(e) {
+    e.preventDefault()
+    if (!newPassword || newPassword.length < 6) {
+      toast.error('Password must be at least 6 characters')
+      return
+    }
+    if (newPassword !== confirmPassword) {
+      toast.error('Passwords do not match')
+      return
+    }
+    setResettingPassword(true)
+    try {
+      const token = localStorage.getItem('auth_token')
+      await axios.post(
+        `${API_URL}/auth/set-password`,
+        { employee_id: resetTargetEmp.employee_id, new_password: newPassword },
+        { headers: { Authorization: `Bearer ${token}` } }
+      )
+      toast.success('Password updated successfully')
+      setResetPasswordModal(false)
+      setResetTargetEmp(null)
+      setNewPassword('')
+      setConfirmPassword('')
+    } catch (err) {
+      toast.error(err?.response?.data?.message ?? err?.message ?? 'Failed to reset password')
+    } finally {
+      setResettingPassword(false)
+    }
+  }
 
   const fetchEmployees = useCallback(async () => {
     setLoading(true)
@@ -257,12 +306,21 @@ export default function EmployeeList() {
                         <StatusBadge status={emp.status ?? 'active'} />
                       </td>
                       <td className="px-5 py-3 text-right">
-                        <button
-                          onClick={(e) => { e.stopPropagation(); navigate(`/employees/${emp.employee_id ?? emp.id}`) }}
-                          className="text-indigo-600 hover:text-indigo-800 text-xs font-semibold hover:underline"
-                        >
-                          View Details
-                        </button>
+                        <div className="flex items-center justify-end gap-2">
+                          <button
+                            onClick={(e) => openResetPassword(emp, e)}
+                            title="Reset Password"
+                            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-full bg-white/60 border border-white/40 text-slate-600 text-xs font-semibold hover:bg-white/80 transition-colors"
+                          >
+                            <KeyRound className="h-3.5 w-3.5" />
+                          </button>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); navigate(`/employees/${emp.employee_id ?? emp.id}`) }}
+                            className="text-indigo-600 hover:text-indigo-800 text-xs font-semibold hover:underline"
+                          >
+                            View Details
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -326,6 +384,67 @@ export default function EmployeeList() {
           </div>
         )}
       </div>
+
+      {/* ── Reset Password Modal ── */}
+      <Modal
+        open={resetPasswordModal}
+        onClose={() => setResetPasswordModal(false)}
+        title={`Reset Password for ${resetTargetEmp ? `${resetTargetEmp.first_name} ${resetTargetEmp.last_name}` : ''}`}
+        size="sm"
+      >
+        <form onSubmit={handleResetPassword} className="space-y-4">
+          <p className="text-sm text-slate-500">
+            Setting a new password for{' '}
+            <span className="font-semibold text-slate-700">
+              {resetTargetEmp?.first_name} {resetTargetEmp?.last_name}
+            </span>{' '}
+            ({resetTargetEmp?.employee_id})
+          </p>
+          <div>
+            <label className="text-xs font-semibold uppercase tracking-widest text-slate-400 mb-3 mt-5 block">
+              New Password
+            </label>
+            <input
+              type="password"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              placeholder="Enter new password"
+              required
+              className="w-full px-4 py-3 rounded-xl border border-white/30 bg-white/60 backdrop-blur-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-800 placeholder-slate-400"
+            />
+          </div>
+          <div>
+            <label className="text-xs font-semibold uppercase tracking-widest text-slate-400 mb-3 mt-5 block">
+              Confirm Password
+            </label>
+            <input
+              type="password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              placeholder="Confirm new password"
+              required
+              className="w-full px-4 py-3 rounded-xl border border-white/30 bg-white/60 backdrop-blur-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-800 placeholder-slate-400"
+            />
+          </div>
+          <div className="flex justify-end gap-3 pt-2">
+            <button
+              type="button"
+              onClick={() => setResetPasswordModal(false)}
+              className="btn-glass"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={resettingPassword}
+              className="btn-primary"
+            >
+              {resettingPassword && <RefreshCw className="h-4 w-4 animate-spin" />}
+              {resettingPassword ? 'Saving…' : 'Update Password'}
+            </button>
+          </div>
+        </form>
+      </Modal>
 
       {/* ── Add Employee Modal ── */}
       <Modal open={showModal} onClose={() => setShowModal(false)} title="Invite New Employee" size="lg">

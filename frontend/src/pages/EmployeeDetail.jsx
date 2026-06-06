@@ -12,12 +12,17 @@ import {
   Building2,
   Briefcase,
   RefreshCw,
+  ShieldCheck,
 } from 'lucide-react'
+import axios from 'axios'
 import { employees, leaves, payroll } from '../api.js'
 import LoadingSpinner from '../components/LoadingSpinner.jsx'
 import StatusBadge from '../components/StatusBadge.jsx'
 import LeaveBalanceCard from '../components/LeaveBalanceCard.jsx'
+import { useAuth } from '../context/AuthContext.jsx'
 import toast from 'react-hot-toast'
+
+const API_URL = import.meta.env.VITE_API_URL || 'https://elite-recruit-payroll-system.onrender.com/api'
 
 function formatINR(amount) {
   if (amount == null || amount === '') return '₹0'
@@ -30,11 +35,14 @@ const TABS = [
   { id: 'leaves', label: 'Leave Balance', icon: Calendar },
   { id: 'slips', label: 'Salary Slips', icon: FileText },
   { id: 'loans', label: 'Loans', icon: CreditCard },
+  { id: 'security', label: 'Security', icon: ShieldCheck, adminOnly: true },
 ]
 
 export default function EmployeeDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const { user: authUser } = useAuth()
+  const isAdmin = ['super_admin', 'hr'].includes(authUser?.role)
   const [tab, setTab] = useState('profile')
   const [loading, setLoading] = useState(true)
   const [emp, setEmp] = useState(null)
@@ -129,12 +137,12 @@ export default function EmployeeDetail() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 border-b border-gray-200">
-        {TABS.map(({ id: tid, label, icon: Icon }) => (
+      <div className="flex gap-1 border-b border-gray-200 overflow-x-auto">
+        {TABS.filter((t) => !t.adminOnly || isAdmin).map(({ id: tid, label, icon: Icon }) => (
           <button
             key={tid}
             onClick={() => setTab(tid)}
-            className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+            className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
               tab === tid
                 ? 'border-indigo-600 text-indigo-600'
                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
@@ -153,6 +161,7 @@ export default function EmployeeDetail() {
         {tab === 'leaves' && <LeavesTab balance={balance} />}
         {tab === 'slips' && <SlipsTab slips={slips} />}
         {tab === 'loans' && <LoansTab loans={loans} />}
+        {tab === 'security' && isAdmin && <SecurityTab emp={emp} />}
       </div>
     </div>
   )
@@ -426,6 +435,95 @@ function LoansTab({ loans }) {
           ))}
         </tbody>
       </table>
+    </div>
+  )
+}
+
+function SecurityTab({ emp }) {
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  async function handleResetPassword(e) {
+    e.preventDefault()
+    if (!newPassword || newPassword.length < 6) {
+      toast.error('Password must be at least 6 characters')
+      return
+    }
+    if (newPassword !== confirmPassword) {
+      toast.error('Passwords do not match')
+      return
+    }
+    setSaving(true)
+    try {
+      const token = localStorage.getItem('auth_token')
+      await axios.post(
+        `${API_URL}/auth/set-password`,
+        { employee_id: emp.employee_id, new_password: newPassword },
+        { headers: { Authorization: `Bearer ${token}` } }
+      )
+      toast.success('Password updated successfully')
+      setNewPassword('')
+      setConfirmPassword('')
+    } catch (err) {
+      toast.error(err?.response?.data?.message ?? err?.message ?? 'Failed to reset password')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="max-w-md">
+      <div className="flex items-center gap-2 mb-6">
+        <ShieldCheck className="h-5 w-5 text-indigo-500" />
+        <h3 className="text-base font-bold text-slate-900">Reset Employee Password</h3>
+      </div>
+      <p className="text-sm text-slate-500 mb-6">
+        Set a new password for{' '}
+        <span className="font-semibold text-slate-700">
+          {emp.first_name} {emp.last_name}
+        </span>{' '}
+        ({emp.employee_id}). The employee will be able to log in with this new password.
+      </p>
+      <form onSubmit={handleResetPassword} className="space-y-4">
+        <div>
+          <label className="text-xs font-semibold uppercase tracking-widest text-slate-400 mb-3 mt-5 block">
+            New Password
+          </label>
+          <input
+            type="password"
+            value={newPassword}
+            onChange={(e) => setNewPassword(e.target.value)}
+            placeholder="Enter new password (min. 6 characters)"
+            required
+            className="w-full px-4 py-3 rounded-xl border border-white/30 bg-white/60 backdrop-blur-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-800 placeholder-slate-400"
+          />
+        </div>
+        <div>
+          <label className="text-xs font-semibold uppercase tracking-widest text-slate-400 mb-3 mt-5 block">
+            Confirm Password
+          </label>
+          <input
+            type="password"
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+            placeholder="Confirm new password"
+            required
+            className="w-full px-4 py-3 rounded-xl border border-white/30 bg-white/60 backdrop-blur-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-800 placeholder-slate-400"
+          />
+        </div>
+        <div className="pt-2">
+          <button
+            type="submit"
+            disabled={saving}
+            className="inline-flex items-center gap-2 px-6 py-2.5 rounded-full text-white text-sm font-semibold disabled:opacity-60 transition-all"
+            style={{ background: 'linear-gradient(135deg, #6366F1, #8B5CF6)' }}
+          >
+            {saving && <RefreshCw className="h-4 w-4 animate-spin" />}
+            {saving ? 'Saving…' : 'Update Password'}
+          </button>
+        </div>
+      </form>
     </div>
   )
 }
