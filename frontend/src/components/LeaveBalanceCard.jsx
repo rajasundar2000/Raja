@@ -1,43 +1,43 @@
 export default function LeaveBalanceCard({ leaveType, available, total, used }) {
   const pct = total > 0 ? Math.min(100, Math.round((used / total) * 100)) : 0
 
-  const colorMap = {
-    'Casual Leave': { bar: 'bg-blue-500', bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200' },
-    'Sick Leave': { bar: 'bg-red-400', bg: 'bg-red-50', text: 'text-red-700', border: 'border-red-200' },
-    'Earned Leave': { bar: 'bg-green-500', bg: 'bg-green-50', text: 'text-green-700', border: 'border-green-200' },
-    'Privilege Leave': { bar: 'bg-purple-500', bg: 'bg-purple-50', text: 'text-purple-700', border: 'border-purple-200' },
-    'Maternity Leave': { bar: 'bg-pink-500', bg: 'bg-pink-50', text: 'text-pink-700', border: 'border-pink-200' },
-    'Paternity Leave': { bar: 'bg-cyan-500', bg: 'bg-cyan-50', text: 'text-cyan-700', border: 'border-cyan-200' },
-    'Compensatory Off': { bar: 'bg-amber-500', bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-200' },
-    'Loss of Pay': { bar: 'bg-gray-400', bg: 'bg-gray-50', text: 'text-gray-700', border: 'border-gray-200' },
-  }
-
-  const colors = colorMap[leaveType] || {
-    bar: 'bg-indigo-500',
-    bg: 'bg-indigo-50',
-    text: 'text-indigo-700',
-    border: 'border-indigo-200',
-  }
-
   return (
-    <div className={`rounded-lg border ${colors.border} ${colors.bg} p-4`}>
-      <div className="flex items-center justify-between mb-2">
-        <span className={`text-sm font-medium ${colors.text}`}>{leaveType}</span>
-        <span className={`text-xs font-semibold ${colors.text}`}>
-          {available} / {total} days
-        </span>
+    <div className="glass-card p-4">
+      {/* Leave type label */}
+      <p
+        className="stat-label mb-3"
+        style={{ color: '#6366F1' }}
+      >
+        {leaveType}
+      </p>
+
+      {/* Available count */}
+      <div className="flex items-end justify-between mb-3">
+        <div>
+          <span className="text-2xl font-black text-slate-800 leading-none">{available}</span>
+          <span className="text-sm font-medium text-slate-500 ml-1">days left</span>
+        </div>
+        <div className="text-right">
+          <p className="text-xs text-slate-400">Used</p>
+          <p className="text-sm font-bold text-slate-600">{used} / {total}</p>
+        </div>
       </div>
 
-      <div className="h-2 bg-white rounded-full overflow-hidden">
+      {/* Progress bar */}
+      <div className="h-2 rounded-full overflow-hidden" style={{ background: 'rgba(99,102,241,0.1)' }}>
         <div
-          className={`h-full ${colors.bar} rounded-full transition-all duration-500`}
-          style={{ width: `${pct}%` }}
+          className="h-full rounded-full transition-all duration-700"
+          style={{
+            width: `${pct}%`,
+            background: 'linear-gradient(90deg, #6366F1, #8B5CF6)',
+          }}
         />
       </div>
 
-      <div className="flex justify-between mt-1.5">
-        <span className="text-xs text-gray-500">Used: {used} days</span>
-        <span className="text-xs text-gray-500">{pct}% used</span>
+      {/* Footer */}
+      <div className="flex justify-between mt-2">
+        <span className="text-xs text-slate-400">{pct}% used</span>
+        <span className="text-xs text-slate-400">{total} total days</span>
       </div>
     </div>
   )

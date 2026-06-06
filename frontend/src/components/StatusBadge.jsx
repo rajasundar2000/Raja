@@ -1,26 +1,28 @@
 export default function StatusBadge({ status }) {
   const map = {
-    approved: 'bg-green-100 text-green-800 ring-green-200',
-    rejected: 'bg-red-100 text-red-800 ring-red-200',
-    pending: 'bg-yellow-100 text-yellow-800 ring-yellow-200',
-    submitted: 'bg-yellow-100 text-yellow-800 ring-yellow-200',
-    draft: 'bg-gray-100 text-gray-700 ring-gray-200',
-    processing: 'bg-blue-100 text-blue-700 ring-blue-200',
-    paid: 'bg-blue-100 text-blue-800 ring-blue-200',
-    locked: 'bg-purple-100 text-purple-800 ring-purple-200',
-    cancelled: 'bg-orange-100 text-orange-800 ring-orange-200',
-    revoked: 'bg-orange-100 text-orange-800 ring-orange-200',
-    active: 'bg-green-100 text-green-800 ring-green-200',
-    inactive: 'bg-gray-100 text-gray-600 ring-gray-200',
-    closed: 'bg-gray-100 text-gray-700 ring-gray-200',
-    foreclosed: 'bg-purple-100 text-purple-700 ring-purple-200',
+    approved:   { cls: 'bg-emerald-100 text-emerald-700', pulse: false },
+    active:     { cls: 'bg-emerald-100 text-emerald-700', pulse: false },
+    paid:       { cls: 'bg-emerald-100 text-emerald-700', pulse: false },
+    rejected:   { cls: 'bg-red-100 text-red-700',         pulse: false },
+    pending:    { cls: 'bg-amber-100 text-amber-700',     pulse: true },
+    submitted:  { cls: 'bg-amber-100 text-amber-700',     pulse: true },
+    draft:      { cls: 'bg-slate-100 text-slate-600',     pulse: false },
+    inactive:   { cls: 'bg-slate-100 text-slate-600',     pulse: false },
+    closed:     { cls: 'bg-slate-100 text-slate-600',     pulse: false },
+    cancelled:  { cls: 'bg-orange-100 text-orange-700',   pulse: false },
+    revoked:    { cls: 'bg-orange-100 text-orange-700',   pulse: false },
+    processing: { cls: 'bg-cyan-100 text-cyan-700',       pulse: false },
+    locked:     { cls: 'bg-violet-100 text-violet-700',   pulse: false },
+    foreclosed: { cls: 'bg-violet-100 text-violet-700',   pulse: false },
   }
 
-  const cls = map[status?.toLowerCase()] || 'bg-gray-100 text-gray-700 ring-gray-200'
+  const entry = map[status?.toLowerCase()] ?? { cls: 'bg-slate-100 text-slate-600', pulse: false }
 
   return (
     <span
-      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset capitalize ${cls}`}
+      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold capitalize ${entry.cls} ${
+        entry.pulse ? 'badge-pulse' : ''
+      }`}
     >
       {status}
     </span>
