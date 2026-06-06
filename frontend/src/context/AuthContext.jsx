@@ -3,6 +3,8 @@ import axios from 'axios'
 
 const AuthContext = createContext(null)
 
+const API_URL = import.meta.env.VITE_API_URL || 'https://elite-recruit-payroll-system.onrender.com/api'
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -23,7 +25,7 @@ export function AuthProvider({ children }) {
   }, [])
 
   const login = async (email, password) => {
-    const res = await axios.post('http://localhost:8000/api/auth/login', { email, password })
+    const res = await axios.post(`${API_URL}/auth/login`, { email, password })
     const { access_token, employee } = res.data
     localStorage.setItem('auth_token', access_token)
     localStorage.setItem('auth_user', JSON.stringify(employee))

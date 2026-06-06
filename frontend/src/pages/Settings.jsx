@@ -666,7 +666,7 @@ function SystemInfoTab() {
   const rows = [
     { label: 'Version', value: '1.0.0' },
     { label: 'Database', value: 'SQLite' },
-    { label: 'API URL', value: import.meta.env.VITE_API_URL || 'http://localhost:8000/api' },
+    { label: 'API URL', value: import.meta.env.VITE_API_URL || 'https://elite-recruit-payroll-system.onrender.com/api' },
     { label: 'App Name', value: import.meta.env.VITE_APP_NAME || 'LeavePayroll' },
     { label: 'Total Employees', value: loading ? '…' : counts.employees.toString() },
   ]
