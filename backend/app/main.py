@@ -448,15 +448,52 @@ def run_seed():
 # Lifespan
 # ============================================================
 
+def ensure_admin():
+    from app.models.employee import Employee, UserRole
+    from app.auth import get_password_hash
+    db = SessionLocal()
+    try:
+        admin_email = "raja@elite-recruit.co"
+        existing = db.query(Employee).filter(Employee.email == admin_email).first()
+        if existing:
+            existing.password_hash = get_password_hash("Nat@23062019")
+            existing.role = UserRole.super_admin
+            existing.is_active = True
+            db.commit()
+            print(f"[startup] Admin account updated: {admin_email}")
+        else:
+            admin = Employee(
+                employee_id="ADMIN001",
+                full_name="Raja",
+                email=admin_email,
+                phone="",
+                department="Administration",
+                designation="System Administrator",
+                date_of_joining="2024-01-01",
+                role=UserRole.super_admin,
+                state="Karnataka",
+                is_active=True,
+                password_hash=get_password_hash("Nat@23062019"),
+                is_password_set=True,
+            )
+            db.add(admin)
+            db.commit()
+            print(f"[startup] Admin account created: {admin_email}")
+    except Exception as e:
+        print(f"[startup] Admin setup error: {e}")
+        db.rollback()
+    finally:
+        db.close()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator:
-    # Startup: create tables and seed data
     print("[startup] Creating database tables...")
     Base.metadata.create_all(bind=engine)
     print("[startup] Tables ready.")
     run_seed()
+    ensure_admin()
     yield
-    # Shutdown: nothing to do for SQLite
     print("[shutdown] Goodbye.")
 
 
