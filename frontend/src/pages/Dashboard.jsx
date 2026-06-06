@@ -2,22 +2,23 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Users,
-  Calendar,
+  CalendarDays,
   DollarSign,
   TrendingUp,
   ArrowRight,
-  PlusCircle,
   FileText,
-  CreditCard,
+  Receipt,
+  CalendarPlus,
+  Activity,
+  List,
   AlertCircle,
   X,
   Bell,
+  Clock,
 } from 'lucide-react'
 import { employees, leaves, payroll, commissionAPI, announcementAPI } from '../api.js'
 import { useAuth } from '../context/AuthContext.jsx'
-import LoadingSpinner from '../components/LoadingSpinner.jsx'
 import StatusBadge from '../components/StatusBadge.jsx'
-import LeaveBalanceCard from '../components/LeaveBalanceCard.jsx'
 import { formatINR } from '../utils/format.js'
 import toast from 'react-hot-toast'
 
@@ -28,42 +29,100 @@ function getGreeting() {
   return 'Good evening'
 }
 
-function StatCard({ icon: Icon, label, value, sub, color = 'indigo', loading }) {
-  const colors = {
-    indigo: 'bg-indigo-50 text-indigo-600',
-    green: 'bg-green-50 text-green-600',
-    amber: 'bg-amber-50 text-amber-600',
-    blue: 'bg-blue-50 text-blue-600',
-    purple: 'bg-purple-50 text-purple-600',
-  }
+// ─── Skeleton loader ───────────────────────────────────────────────────────────
+function Skeleton({ className = '' }) {
+  return <div className={`animate-pulse rounded-xl bg-white/30 ${className}`} />
+}
+
+// ─── Bento stat card ──────────────────────────────────────────────────────────
+function BentoStatCard({ icon: Icon, label, value, sub, gradient, loading, pulse }) {
   return (
-    <div className="bg-white rounded-lg border border-gray-200 p-5 shadow-sm">
-      <div className="flex items-center justify-between mb-3">
-        <div className={`rounded-lg p-2.5 ${colors[color]}`}>
-          <Icon className="h-5 w-5" />
-        </div>
+    <div className={`gradient-card ${gradient} p-5 flex flex-col justify-between min-h-[130px]`}>
+      <div className="flex items-start justify-between">
+        <p className="stat-label text-white/70">{label}</p>
+        <Icon className="h-6 w-6 text-white/80" />
       </div>
       {loading ? (
-        <div className="h-7 w-20 bg-gray-100 animate-pulse rounded" />
+        <Skeleton className="h-9 w-32 mt-2" />
       ) : (
-        <div className="text-2xl font-bold text-gray-900">{value}</div>
+        <div>
+          <div className={`stat-number text-white ${pulse ? 'badge-pulse inline-block' : ''}`}>
+            {value}
+          </div>
+          {sub && <p className="text-white/70 text-xs mt-1">{sub}</p>}
+        </div>
       )}
-      <div className="text-sm text-gray-500 mt-1">{label}</div>
-      {sub && <div className="text-xs text-gray-400 mt-0.5">{sub}</div>}
     </div>
   )
 }
 
+// ─── Leave balance mini‑card ──────────────────────────────────────────────────
+function LeaveBalanceMini({ leaveType, available, total }) {
+  const pct = total > 0 ? Math.min(100, Math.round((available / total) * 100)) : 0
+  return (
+    <div className="bg-white/40 rounded-2xl p-3">
+      <p className="text-xs font-bold text-slate-700 mb-1">{leaveType}</p>
+      <div className="h-2 rounded-full bg-slate-200 overflow-hidden mb-1">
+        <div
+          className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-violet-500 transition-all duration-700"
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+      <p className="text-xs text-slate-500">
+        <span className="font-semibold text-slate-700">{available}</span> of {total} available
+      </p>
+    </div>
+  )
+}
+
+// ─── Quick action card ────────────────────────────────────────────────────────
+function QuickAction({ icon: Icon, label, gradient, onClick }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`flex flex-col items-center gap-2 p-4 rounded-2xl bg-gradient-to-br ${gradient} cursor-pointer hover:scale-105 transition-transform text-white text-center w-full`}
+    >
+      <Icon className="h-6 w-6" />
+      <span className="text-xs font-semibold">{label}</span>
+    </button>
+  )
+}
+
+// ─── Status dot ───────────────────────────────────────────────────────────────
+function StatusDot({ status }) {
+  const map = {
+    approved: 'bg-emerald-500',
+    rejected: 'bg-red-500',
+    submitted: 'bg-amber-500',
+    draft: 'bg-slate-400',
+    cancelled: 'bg-slate-300',
+  }
+  return (
+    <span className={`inline-block h-2 w-2 rounded-full flex-shrink-0 mt-1 ${map[status] ?? 'bg-slate-400'}`} />
+  )
+}
+
+// ─── Announcement banner ──────────────────────────────────────────────────────
+function announcementStyle(priority) {
+  switch (priority) {
+    case 'urgent': return 'bg-red-500/10 border-red-400/40 text-red-900'
+    case 'high': return 'bg-orange-500/10 border-orange-400/40 text-orange-900'
+    case 'normal': return 'bg-indigo-500/10 border-indigo-400/40 text-indigo-900'
+    default: return 'bg-slate-500/10 border-slate-400/40 text-slate-700'
+  }
+}
+
+// ─── Main component ───────────────────────────────────────────────────────────
 export default function Dashboard() {
   const navigate = useNavigate()
   const { user } = useAuth()
+
   const [loading, setLoading] = useState(true)
   const [empCount, setEmpCount] = useState(0)
   const [pendingLeaves, setPendingLeaves] = useState([])
   const [leaveBalance, setLeaveBalance] = useState([])
   const [recentLeaves, setRecentLeaves] = useState([])
   const [payrollCycles, setPayrollCycles] = useState([])
-  const [loans, setLoans] = useState([])
   const [commissionEntries, setCommissionEntries] = useState([])
   const [commissionSummary, setCommissionSummary] = useState(null)
   const [error, setError] = useState(null)
@@ -88,13 +147,11 @@ export default function Dashboard() {
           leaves.getRequests({ status: 'submitted', page_size: 5 }),
           leaves.getBalance(empId),
           payroll.getCycles({ page_size: 5 }),
-          payroll.getLoans({ page_size: 100 }),
           commissionAPI.getEntries({ employee_id: empId, month: curMonth, year: curYear }),
           commissionAPI.getEmployeeSummary(empId, curMonth, curYear),
           announcementAPI.getAll(),
         ]
-
-        const [empRes, leaveReqRes, balRes, cycleRes, loanRes, commRes, commSumRes, annRes] =
+        const [empRes, leaveReqRes, balRes, cycleRes, commRes, commSumRes, annRes] =
           await Promise.allSettled(calls)
 
         if (empRes.status === 'fulfilled') {
@@ -109,18 +166,11 @@ export default function Dashboard() {
         }
         if (balRes.status === 'fulfilled') {
           const d = balRes.value.data
-          const list = d.balances ?? d.data ?? (Array.isArray(d) ? d : [])
-          setLeaveBalance(list)
+          setLeaveBalance(d.balances ?? d.data ?? (Array.isArray(d) ? d : []))
         }
         if (cycleRes.status === 'fulfilled') {
           const d = cycleRes.value.data
-          const list = d.results ?? d.data ?? (Array.isArray(d) ? d : [])
-          setPayrollCycles(list)
-        }
-        if (loanRes.status === 'fulfilled') {
-          const d = loanRes.value.data
-          const list = d.results ?? d.data ?? (Array.isArray(d) ? d : [])
-          setLoans(list.filter((l) => l.status === 'active'))
+          setPayrollCycles(d.results ?? d.data ?? (Array.isArray(d) ? d : []))
         }
         if (commRes.status === 'fulfilled') {
           const d = commRes.value.data
@@ -151,35 +201,24 @@ export default function Dashboard() {
   }
 
   const visibleAnnouncements = announcements.filter((a) => !dismissedIds.includes(a.id))
-
   const latestCycle = payrollCycles[0]
   const totalPayroll = latestCycle?.total_net_pay ?? latestCycle?.total_amount ?? 0
-
-  const thisMonthCommission = commissionSummary?.total ??
+  const thisMonthCommission =
+    commissionSummary?.total ??
     commissionEntries
       .filter((e) => e.status === 'approved')
       .reduce((s, e) => s + parseFloat(e.commission_amount ?? 0), 0)
-
   const firstName = user?.full_name?.split(' ')[0] ?? 'there'
 
-  function announcementStyle(priority) {
-    switch (priority) {
-      case 'urgent': return 'bg-red-50 border-red-300 text-red-900'
-      case 'high': return 'bg-orange-50 border-orange-300 text-orange-900'
-      case 'normal': return 'bg-blue-50 border-blue-300 text-blue-900'
-      default: return 'bg-gray-50 border-gray-300 text-gray-700'
-    }
-  }
-
   return (
-    <div className="space-y-6">
-      {/* Announcements */}
+    <div className="animate-fade-in-up space-y-6">
+      {/* ── Announcements ── */}
       {visibleAnnouncements.length > 0 && (
-        <div className="space-y-2">
+        <div className="space-y-2 animate-stagger-1">
           {visibleAnnouncements.map((ann) => (
             <div
               key={ann.id}
-              className={`flex items-start gap-3 rounded-xl border px-4 py-3 ${announcementStyle(ann.priority)}`}
+              className={`flex items-start gap-3 rounded-2xl border px-4 py-3 ${announcementStyle(ann.priority)}`}
             >
               <Bell className="h-4 w-4 mt-0.5 flex-shrink-0" />
               <div className="flex-1 min-w-0">
@@ -198,295 +237,215 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* Greeting */}
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">
-          {getGreeting()}, {firstName}! 👋
-        </h1>
-        <p className="text-sm text-gray-500 mt-0.5">
-          Indian Leave Management & Payroll — FY 2025–26
-        </p>
+      {/* ── Greeting bar ── */}
+      <div className="flex items-center justify-between animate-stagger-1">
+        <div>
+          <p className="stat-label text-indigo-400">{getGreeting()}</p>
+          <h1 className="text-3xl font-black text-slate-900">{firstName} 👋</h1>
+        </div>
+        <div className="text-right hidden sm:block">
+          <p className="text-sm font-medium text-slate-500">
+            {now.toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' })}
+          </p>
+          <p className="text-xs text-slate-400">FY 2025–26</p>
+        </div>
       </div>
 
-      {/* Error banner */}
+      {/* ── Error banner ── */}
       {error && (
-        <div className="flex items-center gap-2 rounded-lg bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800">
+        <div className="flex items-center gap-2 rounded-2xl bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800">
           <AlertCircle className="h-4 w-4 flex-shrink-0" />
           {error} — Showing demo mode with empty data.
         </div>
       )}
 
-      {/* Stat cards */}
-      <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-5">
+      {/* ── Bento Row 1: Stat cards ── */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 animate-stagger-2">
         {isManager && (
-          <StatCard
+          <BentoStatCard
             icon={Users}
-            label="Total Employees"
+            label="TOTAL EMPLOYEES"
             value={empCount}
-            color="indigo"
+            sub="Active team members"
+            gradient="gradient-indigo"
             loading={loading}
           />
         )}
-        <StatCard
-          icon={Calendar}
-          label="Pending Leaves"
+        <BentoStatCard
+          icon={Clock}
+          label="PENDING APPROVALS"
           value={pendingLeaves.length}
-          sub="Awaiting approval"
-          color="amber"
+          sub="Leaves awaiting action"
+          gradient="gradient-amber"
           loading={loading}
+          pulse={pendingLeaves.length > 0}
         />
         {isManager && (
-          <StatCard
+          <BentoStatCard
             icon={DollarSign}
-            label="This Month Payroll"
+            label="THIS MONTH PAYROLL"
             value={formatINR(totalPayroll)}
-            sub={latestCycle ? `${latestCycle.month_name ?? ''} ${latestCycle.year ?? ''}` : 'No cycles yet'}
-            color="green"
+            sub="Net disbursement"
+            gradient="gradient-cyan"
             loading={loading}
           />
         )}
-        <StatCard
+        <BentoStatCard
           icon={TrendingUp}
-          label="My Commission"
+          label="MY COMMISSION"
           value={formatINR(thisMonthCommission)}
-          sub={`${new Date().toLocaleString('en-IN', { month: 'short' })} ${curYear}`}
-          color="purple"
-          loading={loading}
-        />
-        <StatCard
-          icon={CreditCard}
-          label="Active Loans"
-          value={loans.length}
-          sub="Employee loans"
-          color="blue"
+          sub={`${now.toLocaleString('en-IN', { month: 'short' })} ${curYear}`}
+          gradient="gradient-green"
           loading={loading}
         />
       </div>
 
-      {/* Main grid */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        {/* Recent leave requests */}
-        <div className="lg:col-span-2 bg-white rounded-lg border border-gray-200 shadow-sm">
-          <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
-            <h2 className="text-base font-semibold text-gray-900">Recent Leave Requests</h2>
-            <button
-              onClick={() => navigate('/leaves')}
-              className="flex items-center gap-1 text-sm text-indigo-600 hover:text-indigo-800"
-            >
-              View all <ArrowRight className="h-4 w-4" />
-            </button>
+      {/* ── Bento Row 2: Leave balance + Recent requests ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 animate-stagger-3">
+        {/* Leave Balance */}
+        <div className="glass-card p-5 lg:col-span-2">
+          <div className="flex items-center gap-2 mb-4">
+            <CalendarDays className="h-5 w-5 text-indigo-500" />
+            <h2 className="text-xl font-bold text-slate-900">My Leave Balance</h2>
           </div>
-
           {loading ? (
-            <div className="flex justify-center py-12">
-              <LoadingSpinner text="Loading leaves..." />
+            <div className="grid grid-cols-2 gap-3">
+              {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-20" />)}
             </div>
-          ) : recentLeaves.length === 0 ? (
-            <div className="text-center py-12 text-gray-400 text-sm">
-              No pending leave requests
-            </div>
+          ) : leaveBalance.length === 0 ? (
+            <p className="text-sm text-slate-400 text-center py-8">No balance data</p>
           ) : (
-            <>
-              {/* Desktop table */}
-              <div className="hidden md:block overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead className="bg-gray-50 text-xs text-gray-500 uppercase tracking-wider">
-                    <tr>
-                      <th className="px-5 py-3 text-left">Employee</th>
-                      <th className="px-5 py-3 text-left">Type</th>
-                      <th className="px-5 py-3 text-left">From</th>
-                      <th className="px-5 py-3 text-left">Days</th>
-                      <th className="px-5 py-3 text-left">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {recentLeaves.map((req, i) => (
-                      <tr key={req.id ?? i} className="hover:bg-gray-50">
-                        <td className="px-5 py-3 font-medium text-gray-900">
-                          {req.employee_name ?? req.employee_id ?? '—'}
-                        </td>
-                        <td className="px-5 py-3 text-gray-600">
-                          {req.leave_type_name ?? req.leave_type ?? '—'}
-                        </td>
-                        <td className="px-5 py-3 text-gray-600">
-                          {req.from_date ?? req.start_date ?? '—'}
-                        </td>
-                        <td className="px-5 py-3 text-gray-600">
-                          {req.working_days ?? req.days ?? '—'}
-                        </td>
-                        <td className="px-5 py-3">
-                          <StatusBadge status={req.status} />
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-
-              {/* Mobile cards */}
-              <div className="md:hidden divide-y divide-gray-100">
-                {recentLeaves.map((req, i) => (
-                  <div key={req.id ?? i} className="p-4">
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <p className="font-semibold text-gray-900 text-sm">
-                          {req.employee_name ?? req.employee_id ?? '—'}
-                        </p>
-                        <p className="text-xs text-gray-500 mt-0.5">
-                          {req.leave_type_name ?? req.leave_type ?? '—'}
-                        </p>
-                      </div>
-                      <StatusBadge status={req.status} />
-                    </div>
-                    <div className="mt-2 grid grid-cols-2 gap-1 text-xs text-gray-500">
-                      <span>From: {req.from_date ?? req.start_date ?? '—'}</span>
-                      <span>Days: {req.working_days ?? req.days ?? '—'}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </>
-          )}
-        </div>
-
-        {/* Leave balance */}
-        <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
-          <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
-            <div>
-              <h2 className="text-base font-semibold text-gray-900">My Leave Balance</h2>
-              <p className="text-xs text-gray-400 mt-0.5">Employee: {empId}</p>
-            </div>
-          </div>
-          <div className="p-4 space-y-3">
-            {loading ? (
-              <div className="flex justify-center py-8">
-                <LoadingSpinner size="sm" text="Loading..." />
-              </div>
-            ) : leaveBalance.length === 0 ? (
-              <p className="text-sm text-gray-400 text-center py-8">No balance data</p>
-            ) : (
-              leaveBalance.slice(0, 5).map((b, i) => (
-                <LeaveBalanceCard
+            <div className="grid grid-cols-2 gap-3">
+              {leaveBalance.slice(0, 6).map((b, i) => (
+                <LeaveBalanceMini
                   key={b.leave_type_id ?? i}
                   leaveType={b.leave_type_name ?? b.leave_type ?? `Type ${i + 1}`}
                   available={b.available ?? b.remaining ?? 0}
                   total={b.total_allotted ?? b.total ?? 0}
-                  used={b.used ?? b.taken ?? 0}
                 />
-              ))
-            )}
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Recent Requests */}
+        <div className="glass-card p-5 flex flex-col">
+          <div className="flex items-center gap-2 mb-4">
+            <List className="h-5 w-5 text-indigo-500" />
+            <h2 className="text-xl font-bold text-slate-900">Recent Requests</h2>
           </div>
+          {loading ? (
+            <div className="space-y-3 flex-1">
+              {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-10" />)}
+            </div>
+          ) : recentLeaves.length === 0 ? (
+            <p className="text-sm text-slate-400 text-center py-8 flex-1">No recent requests</p>
+          ) : (
+            <div className="space-y-2 flex-1">
+              {recentLeaves.map((req, i) => (
+                <div key={req.id ?? i} className="flex items-start gap-2 py-2 border-b border-slate-100 last:border-0">
+                  <StatusDot status={req.status} />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-semibold text-slate-800 truncate">
+                      {req.employee_name ?? req.employee_id ?? '—'}
+                    </p>
+                    <p className="text-xs text-slate-500">
+                      {req.leave_type_name ?? req.leave_type ?? '—'} &bull; {req.from_date ?? req.start_date ?? '—'}
+                    </p>
+                  </div>
+                  <StatusBadge status={req.status} />
+                </div>
+              ))}
+            </div>
+          )}
+          <button
+            onClick={() => navigate('/leaves/request')}
+            className="btn-primary w-full mt-4 justify-center"
+          >
+            Apply Leave
+          </button>
         </div>
       </div>
 
-      {/* My Commission This Month */}
-      <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
-        <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
-          <div>
-            <h2 className="text-base font-semibold text-gray-900">My Commission This Month</h2>
-            <p className="text-xs text-gray-400 mt-0.5">
-              {new Date().toLocaleString('en-IN', { month: 'long' })} {curYear}
-            </p>
+      {/* ── Bento Row 3: Quick Actions + Recent Activity ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 animate-stagger-4">
+        {/* Quick Actions */}
+        <div className="glass-card p-5">
+          <h2 className="text-xl font-bold text-slate-900 mb-4">Quick Actions</h2>
+          <div className="grid grid-cols-2 gap-3">
+            <QuickAction
+              icon={CalendarPlus}
+              label="Apply Leave"
+              gradient="from-indigo-500 to-indigo-600"
+              onClick={() => navigate('/leaves/request')}
+            />
+            <QuickAction
+              icon={FileText}
+              label="View Salary Slip"
+              gradient="from-violet-500 to-violet-600"
+              onClick={() => navigate(`/employees/${empId}`)}
+            />
+            <QuickAction
+              icon={TrendingUp}
+              label="Log Commission"
+              gradient="from-amber-500 to-orange-500"
+              onClick={() => navigate('/commission')}
+            />
+            <QuickAction
+              icon={Receipt}
+              label="View Reports"
+              gradient="from-cyan-500 to-cyan-600"
+              onClick={() => navigate('/reports')}
+            />
           </div>
-          <button
-            onClick={() => navigate('/commission')}
-            className="flex items-center gap-1 text-sm text-indigo-600 hover:text-indigo-800"
-          >
-            View all <ArrowRight className="h-4 w-4" />
-          </button>
         </div>
 
-        {loading ? (
-          <div className="flex justify-center py-8">
-            <LoadingSpinner size="sm" text="Loading commission..." />
+        {/* Recent Commission Activity */}
+        <div className="glass-card p-5">
+          <div className="flex items-center gap-2 mb-4">
+            <Activity className="h-5 w-5 text-indigo-500" />
+            <h2 className="text-xl font-bold text-slate-900">Recent Activity</h2>
           </div>
-        ) : commissionEntries.length === 0 ? (
-          <div className="text-center py-8 text-gray-400 text-sm">
-            No commission entries this month
-          </div>
-        ) : (
-          <>
-            {/* Desktop */}
-            <div className="hidden md:block overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-gray-50 text-xs text-gray-500 uppercase tracking-wider">
-                  <tr>
-                    <th className="px-5 py-3 text-left">Description</th>
-                    <th className="px-5 py-3 text-right">Deal Value</th>
-                    <th className="px-5 py-3 text-right">Commission</th>
-                    <th className="px-5 py-3 text-left">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {commissionEntries.slice(0, 5).map((e, i) => (
-                    <tr key={e.id ?? i} className="hover:bg-gray-50">
-                      <td className="px-5 py-3 text-gray-700">{e.description ?? '—'}</td>
-                      <td className="px-5 py-3 text-right text-gray-600">
-                        {e.deal_value ? formatINR(e.deal_value) : '—'}
-                      </td>
-                      <td className="px-5 py-3 text-right font-semibold text-indigo-700">
-                        {formatINR(e.commission_amount ?? 0)}
-                      </td>
-                      <td className="px-5 py-3"><StatusBadge status={e.status ?? 'pending'} /></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+          {loading ? (
+            <div className="space-y-3">
+              {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-10" />)}
             </div>
-
-            {/* Mobile */}
-            <div className="md:hidden divide-y divide-gray-100">
+          ) : commissionEntries.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-10 text-slate-400">
+              <Activity className="h-10 w-10 mb-3 text-slate-300" />
+              <p className="text-sm">No recent activity</p>
+            </div>
+          ) : (
+            <div className="relative pl-4 space-y-3">
+              {/* Timeline line */}
+              <div className="absolute left-0 top-2 bottom-2 w-0.5 bg-gradient-to-b from-indigo-400 to-violet-400 rounded-full" />
               {commissionEntries.slice(0, 5).map((e, i) => (
-                <div key={e.id ?? i} className="p-4 flex justify-between items-center">
-                  <div>
-                    <p className="text-sm font-medium text-gray-900">{e.description ?? '—'}</p>
-                    {e.deal_value && (
-                      <p className="text-xs text-gray-500 mt-0.5">Deal: {formatINR(e.deal_value)}</p>
-                    )}
-                  </div>
-                  <div className="text-right">
-                    <p className="font-bold text-indigo-700">{formatINR(e.commission_amount ?? 0)}</p>
-                    <div className="mt-1"><StatusBadge status={e.status ?? 'pending'} /></div>
+                <div key={e.id ?? i} className="relative">
+                  <div className="absolute -left-[18px] top-1.5 h-2.5 w-2.5 rounded-full bg-indigo-500 border-2 border-white" />
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold text-slate-800 truncate">{e.description ?? 'Commission entry'}</p>
+                      {e.deal_value && (
+                        <p className="text-xs text-slate-500">Deal: {formatINR(e.deal_value)}</p>
+                      )}
+                    </div>
+                    <div className="text-right flex-shrink-0">
+                      <p className="text-xs font-bold text-indigo-700">{formatINR(e.commission_amount ?? 0)}</p>
+                      <StatusBadge status={e.status ?? 'pending'} />
+                    </div>
                   </div>
                 </div>
               ))}
             </div>
-          </>
-        )}
-      </div>
-
-      {/* Quick actions */}
-      <div className="bg-white rounded-lg border border-gray-200 shadow-sm px-5 py-4">
-        <h2 className="text-base font-semibold text-gray-900 mb-4">Quick Actions</h2>
-        <div className="flex flex-wrap gap-3">
-          <button
-            onClick={() => navigate('/leaves/request')}
-            className="flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-indigo-700 transition-colors min-h-[44px]"
-          >
-            <PlusCircle className="h-4 w-4" />
-            Apply Leave
-          </button>
-          <button
-            onClick={() => navigate(`/employees/${empId}`)}
-            className="flex items-center gap-2 rounded-lg border border-gray-300 px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors min-h-[44px]"
-          >
-            <FileText className="h-4 w-4" />
-            View Salary Slip
-          </button>
-          <button
-            onClick={() => navigate('/commission')}
-            className="flex items-center gap-2 rounded-lg border border-gray-300 px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors min-h-[44px]"
-          >
-            <TrendingUp className="h-4 w-4" />
-            Log Commission
-          </button>
-          <button
-            onClick={() => navigate('/reports')}
-            className="flex items-center gap-2 rounded-lg border border-gray-300 px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors min-h-[44px]"
-          >
-            <DollarSign className="h-4 w-4" />
-            View Reports
-          </button>
+          )}
+          {commissionEntries.length > 0 && (
+            <button
+              onClick={() => navigate('/commission')}
+              className="btn-glass w-full mt-4 justify-center"
+            >
+              View all <ArrowRight className="h-4 w-4 ml-1" />
+            </button>
+          )}
         </div>
       </div>
     </div>
