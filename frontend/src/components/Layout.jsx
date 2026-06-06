@@ -10,7 +10,6 @@ import {
   X,
   Bell,
   LogOut,
-  TrendingUp,
   Settings,
   Receipt,
   User,

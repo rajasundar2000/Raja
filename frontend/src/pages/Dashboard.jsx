@@ -4,7 +4,6 @@ import {
   Users,
   CalendarDays,
   DollarSign,
-  TrendingUp,
   ArrowRight,
   FileText,
   Receipt,
@@ -15,8 +14,14 @@ import {
   X,
   Bell,
   Clock,
+  UserPlus,
+  BarChart2,
+  Settings,
+  CheckCircle,
+  XCircle,
+  Briefcase,
 } from 'lucide-react'
-import { employees, leaves, payroll, commissionAPI, announcementAPI } from '../api.js'
+import { employees, leaves, payroll, expenseAPI, announcementAPI } from '../api.js'
 import { useAuth } from '../context/AuthContext.jsx'
 import StatusBadge from '../components/StatusBadge.jsx'
 import { formatINR } from '../utils/format.js'
@@ -37,16 +42,19 @@ function Skeleton({ className = '' }) {
 // ─── Bento stat card ──────────────────────────────────────────────────────────
 function BentoStatCard({ icon: Icon, label, value, sub, gradient, loading, pulse }) {
   return (
-    <div className={`gradient-card ${gradient} p-5 flex flex-col justify-between min-h-[130px]`}>
+    <div
+      className="p-5 flex flex-col justify-between min-h-[130px] rounded-2xl"
+      style={{ background: gradient }}
+    >
       <div className="flex items-start justify-between">
-        <p className="stat-label text-white/70">{label}</p>
+        <p className="text-xs font-semibold uppercase tracking-widest text-white/70">{label}</p>
         <Icon className="h-6 w-6 text-white/80" />
       </div>
       {loading ? (
         <Skeleton className="h-9 w-32 mt-2" />
       ) : (
         <div>
-          <div className={`stat-number text-white ${pulse ? 'badge-pulse inline-block' : ''}`}>
+          <div className={`text-3xl font-black text-white ${pulse ? 'animate-pulse' : ''}`}>
             {value}
           </div>
           {sub && <p className="text-white/70 text-xs mt-1">{sub}</p>}
@@ -80,7 +88,8 @@ function QuickAction({ icon: Icon, label, gradient, onClick }) {
   return (
     <button
       onClick={onClick}
-      className={`flex flex-col items-center gap-2 p-4 rounded-2xl bg-gradient-to-br ${gradient} cursor-pointer hover:scale-105 transition-transform text-white text-center w-full`}
+      className="flex flex-col items-center gap-2 p-4 rounded-2xl cursor-pointer hover:scale-105 transition-transform text-white text-center w-full"
+      style={{ background: gradient }}
     >
       <Icon className="h-6 w-6" />
       <span className="text-xs font-semibold">{label}</span>
@@ -96,6 +105,7 @@ function StatusDot({ status }) {
     submitted: 'bg-amber-500',
     draft: 'bg-slate-400',
     cancelled: 'bg-slate-300',
+    pending: 'bg-amber-500',
   }
   return (
     <span className={`inline-block h-2 w-2 rounded-full flex-shrink-0 mt-1 ${map[status] ?? 'bg-slate-400'}`} />
@@ -112,72 +122,390 @@ function announcementStyle(priority) {
   }
 }
 
-// ─── Main component ───────────────────────────────────────────────────────────
-export default function Dashboard() {
+// ─── ADMIN DASHBOARD ─────────────────────────────────────────────────────────
+function AdminDashboard() {
   const navigate = useNavigate()
-  const { user } = useAuth()
-
   const [loading, setLoading] = useState(true)
   const [empCount, setEmpCount] = useState(0)
   const [pendingLeaves, setPendingLeaves] = useState([])
-  const [leaveBalance, setLeaveBalance] = useState([])
-  const [recentLeaves, setRecentLeaves] = useState([])
+  const [pendingExpenses, setPendingExpenses] = useState([])
   const [payrollCycles, setPayrollCycles] = useState([])
-  const [commissionEntries, setCommissionEntries] = useState([])
-  const [commissionSummary, setCommissionSummary] = useState(null)
-  const [error, setError] = useState(null)
   const [announcements, setAnnouncements] = useState([])
   const [dismissedIds, setDismissedIds] = useState(() => {
     try { return JSON.parse(sessionStorage.getItem('dismissed_announcements') || '[]') } catch { return [] }
   })
+  const [error, setError] = useState(null)
+  const [actionLoading, setActionLoading] = useState({})
 
-  const empId = user?.employee_id ?? 'E001'
-  const isManager = ['hr', 'super_admin', 'manager'].includes(user?.role)
   const now = new Date()
-  const curMonth = now.getMonth() + 1
-  const curYear = now.getFullYear()
+  const firstName = ''
 
   useEffect(() => {
     async function fetchAll() {
       setLoading(true)
       setError(null)
       try {
-        const calls = [
-          ...(isManager ? [employees.getAll({ page: 1, page_size: 1 })] : [Promise.resolve({ data: {} })]),
-          leaves.getRequests({ status: 'submitted', page_size: 5 }),
-          leaves.getBalance(empId),
+        const [empRes, leaveRes, expenseRes, cycleRes, annRes] = await Promise.allSettled([
+          employees.getAll({ page: 1, page_size: 1 }),
+          leaves.getRequests({ status: 'submitted', page_size: 10 }),
+          expenseAPI.getAll({ status: 'pending', page_size: 10 }),
           payroll.getCycles({ page_size: 5 }),
-          commissionAPI.getEntries({ employee_id: empId, month: curMonth, year: curYear }),
-          commissionAPI.getEmployeeSummary(empId, curMonth, curYear),
           announcementAPI.getAll(),
-        ]
-        const [empRes, leaveReqRes, balRes, cycleRes, commRes, commSumRes, annRes] =
-          await Promise.allSettled(calls)
+        ])
 
         if (empRes.status === 'fulfilled') {
           const d = empRes.value.data
           setEmpCount(d.count ?? d.total ?? (Array.isArray(d) ? d.length : 0))
         }
-        if (leaveReqRes.status === 'fulfilled') {
-          const d = leaveReqRes.value.data
-          const list = d.results ?? d.data ?? (Array.isArray(d) ? d : [])
-          setPendingLeaves(list)
-          setRecentLeaves(list.slice(0, 5))
+        if (leaveRes.status === 'fulfilled') {
+          const d = leaveRes.value.data
+          setPendingLeaves(d.results ?? d.data ?? (Array.isArray(d) ? d : []))
         }
-        if (balRes.status === 'fulfilled') {
-          const d = balRes.value.data
-          setLeaveBalance(d.balances ?? d.data ?? (Array.isArray(d) ? d : []))
+        if (expenseRes.status === 'fulfilled') {
+          const d = expenseRes.value.data
+          setPendingExpenses(d.results ?? d.data ?? (Array.isArray(d) ? d : []))
         }
         if (cycleRes.status === 'fulfilled') {
           const d = cycleRes.value.data
           setPayrollCycles(d.results ?? d.data ?? (Array.isArray(d) ? d : []))
         }
-        if (commRes.status === 'fulfilled') {
-          const d = commRes.value.data
-          setCommissionEntries(d.results ?? d.data ?? (Array.isArray(d) ? d : []))
+        if (annRes.status === 'fulfilled') {
+          const d = annRes.value.data
+          setAnnouncements(d.results ?? d.announcements ?? (Array.isArray(d) ? d : []))
         }
-        if (commSumRes.status === 'fulfilled') {
-          setCommissionSummary(commSumRes.value.data)
+      } catch {
+        setError('Failed to load dashboard data.')
+        toast.error('Could not connect to backend API')
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchAll()
+  }, [])
+
+  function dismissAnnouncement(id) {
+    const updated = [...dismissedIds, id]
+    setDismissedIds(updated)
+    sessionStorage.setItem('dismissed_announcements', JSON.stringify(updated))
+  }
+
+  async function handleLeaveAction(leaveId, action) {
+    setActionLoading((prev) => ({ ...prev, [`leave_${leaveId}`]: action }))
+    try {
+      await leaves.approveRequest(leaveId, action, '')
+      toast.success(`Leave request ${action === 'approve' ? 'approved' : 'rejected'}`)
+      setPendingLeaves((prev) => prev.filter((l) => l.id !== leaveId))
+    } catch (err) {
+      toast.error(err.userMessage ?? `Failed to ${action} leave`)
+    } finally {
+      setActionLoading((prev) => { const n = { ...prev }; delete n[`leave_${leaveId}`]; return n })
+    }
+  }
+
+  async function handleExpenseAction(expenseId, action) {
+    setActionLoading((prev) => ({ ...prev, [`expense_${expenseId}`]: action }))
+    try {
+      await expenseAPI.approve(expenseId, { action })
+      toast.success(`Expense ${action === 'approve' ? 'approved' : 'rejected'}`)
+      setPendingExpenses((prev) => prev.filter((e) => e.id !== expenseId))
+    } catch (err) {
+      toast.error(err.userMessage ?? `Failed to ${action} expense`)
+    } finally {
+      setActionLoading((prev) => { const n = { ...prev }; delete n[`expense_${expenseId}`]; return n })
+    }
+  }
+
+  const visibleAnnouncements = announcements.filter((a) => !dismissedIds.includes(a.id))
+  const latestCycle = payrollCycles[0]
+  const activePayrollLabel = latestCycle
+    ? `${latestCycle.month_name ?? latestCycle.month} ${latestCycle.year}`
+    : 'None'
+
+  return (
+    <div className="animate-fade-in-up space-y-6">
+      {/* Announcements */}
+      {visibleAnnouncements.length > 0 && (
+        <div className="space-y-2">
+          {visibleAnnouncements.map((ann) => (
+            <div
+              key={ann.id}
+              className={`flex items-start gap-3 rounded-2xl border px-4 py-3 ${announcementStyle(ann.priority)}`}
+            >
+              <Bell className="h-4 w-4 mt-0.5 flex-shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="font-semibold text-sm">{ann.title}</p>
+                <p className="text-sm mt-0.5 opacity-90">{ann.content}</p>
+              </div>
+              <button
+                onClick={() => dismissAnnouncement(ann.id)}
+                className="flex-shrink-0 p-1 rounded-lg hover:bg-black/5 transition-colors"
+                aria-label="Dismiss"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Greeting */}
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-widest text-indigo-400">{getGreeting()}</p>
+          <h1 className="text-3xl font-black text-slate-900">Admin Dashboard</h1>
+        </div>
+        <div className="text-right hidden sm:block">
+          <p className="text-sm font-medium text-slate-500">
+            {now.toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' })}
+          </p>
+          <p className="text-xs text-slate-400">FY 2025–26</p>
+        </div>
+      </div>
+
+      {/* Error */}
+      {error && (
+        <div className="flex items-center gap-2 rounded-2xl bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800">
+          <AlertCircle className="h-4 w-4 flex-shrink-0" />
+          {error} — Showing demo mode with empty data.
+        </div>
+      )}
+
+      {/* Stats row */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <BentoStatCard
+          icon={Users}
+          label="Total Employees"
+          value={empCount}
+          sub="Active team members"
+          gradient="linear-gradient(135deg, #6366F1, #8B5CF6)"
+          loading={loading}
+        />
+        <BentoStatCard
+          icon={Clock}
+          label="Pending Leave Requests"
+          value={pendingLeaves.length}
+          sub="Awaiting approval"
+          gradient="linear-gradient(135deg, #F59E0B, #EF4444)"
+          loading={loading}
+          pulse={pendingLeaves.length > 0}
+        />
+        <BentoStatCard
+          icon={Receipt}
+          label="Pending Expense Claims"
+          value={pendingExpenses.length}
+          sub="Awaiting approval"
+          gradient="linear-gradient(135deg, #06B6D4, #0EA5E9)"
+          loading={loading}
+          pulse={pendingExpenses.length > 0}
+        />
+        <BentoStatCard
+          icon={DollarSign}
+          label="Active Payroll Cycle"
+          value={activePayrollLabel}
+          sub="Current cycle"
+          gradient="linear-gradient(135deg, #10B981, #059669)"
+          loading={loading}
+        />
+      </div>
+
+      {/* Pending Leave Approvals + Pending Expense Claims */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* Pending Leave Approvals */}
+        <div className="bg-white/70 backdrop-blur-xl rounded-2xl border border-white/50 shadow-lg p-5">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <CalendarDays className="h-5 w-5 text-indigo-500" />
+              <h2 className="text-lg font-bold text-slate-900">Pending Leave Approvals</h2>
+            </div>
+            <button
+              onClick={() => navigate('/leaves')}
+              className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 flex items-center gap-1"
+            >
+              View All <ArrowRight className="h-3 w-3" />
+            </button>
+          </div>
+          {loading ? (
+            <div className="space-y-3">
+              {[...Array(3)].map((_, i) => <Skeleton key={i} className="h-14" />)}
+            </div>
+          ) : pendingLeaves.length === 0 ? (
+            <div className="text-center py-10 text-slate-400">
+              <CheckCircle className="h-8 w-8 mx-auto mb-2 text-emerald-300" />
+              <p className="text-sm">No pending leave requests</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {pendingLeaves.slice(0, 5).map((req) => {
+                const leaveKey = `leave_${req.id}`
+                return (
+                  <div key={req.id} className="flex items-center gap-3 bg-white/50 rounded-xl px-3 py-2.5">
+                    <StatusDot status={req.status} />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-semibold text-slate-800 truncate">
+                        {req.employee_name ?? req.employee_id ?? '—'}
+                      </p>
+                      <p className="text-xs text-slate-500">
+                        {req.leave_type_name ?? req.leave_type ?? '—'} &bull;{' '}
+                        {req.from_date ?? req.start_date ?? '—'} – {req.to_date ?? req.end_date ?? '—'}
+                        {req.number_of_days ? ` (${req.number_of_days}d)` : ''}
+                      </p>
+                    </div>
+                    <div className="flex gap-1.5 flex-shrink-0">
+                      <button
+                        disabled={!!actionLoading[leaveKey]}
+                        onClick={() => handleLeaveAction(req.id, 'approve')}
+                        className="px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-700 hover:bg-emerald-200 disabled:opacity-50 transition-colors"
+                      >
+                        {actionLoading[leaveKey] === 'approve' ? '…' : 'Approve'}
+                      </button>
+                      <button
+                        disabled={!!actionLoading[leaveKey]}
+                        onClick={() => handleLeaveAction(req.id, 'reject')}
+                        className="px-2.5 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-700 hover:bg-red-200 disabled:opacity-50 transition-colors"
+                      >
+                        {actionLoading[leaveKey] === 'reject' ? '…' : 'Reject'}
+                      </button>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Pending Expense Claims */}
+        <div className="bg-white/70 backdrop-blur-xl rounded-2xl border border-white/50 shadow-lg p-5">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <Receipt className="h-5 w-5 text-cyan-500" />
+              <h2 className="text-lg font-bold text-slate-900">Pending Expense Claims</h2>
+            </div>
+            <button
+              onClick={() => navigate('/expenses')}
+              className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 flex items-center gap-1"
+            >
+              View All <ArrowRight className="h-3 w-3" />
+            </button>
+          </div>
+          {loading ? (
+            <div className="space-y-3">
+              {[...Array(3)].map((_, i) => <Skeleton key={i} className="h-14" />)}
+            </div>
+          ) : pendingExpenses.length === 0 ? (
+            <div className="text-center py-10 text-slate-400">
+              <CheckCircle className="h-8 w-8 mx-auto mb-2 text-emerald-300" />
+              <p className="text-sm">No pending expense claims</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {pendingExpenses.slice(0, 5).map((exp) => {
+                const expKey = `expense_${exp.id}`
+                return (
+                  <div key={exp.id} className="flex items-center gap-3 bg-white/50 rounded-xl px-3 py-2.5">
+                    <StatusDot status={exp.status ?? 'pending'} />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-semibold text-slate-800 truncate">
+                        {exp.employee_name ?? exp.employee_id ?? '—'}
+                      </p>
+                      <p className="text-xs text-slate-500">
+                        {exp.category ?? exp.expense_category ?? '—'} &bull; {formatINR(exp.amount ?? exp.total_amount ?? 0)}
+                      </p>
+                    </div>
+                    <div className="flex gap-1.5 flex-shrink-0">
+                      <button
+                        disabled={!!actionLoading[expKey]}
+                        onClick={() => handleExpenseAction(exp.id, 'approve')}
+                        className="px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-700 hover:bg-emerald-200 disabled:opacity-50 transition-colors"
+                      >
+                        {actionLoading[expKey] === 'approve' ? '…' : 'Approve'}
+                      </button>
+                      <button
+                        disabled={!!actionLoading[expKey]}
+                        onClick={() => handleExpenseAction(exp.id, 'reject')}
+                        className="px-2.5 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-700 hover:bg-red-200 disabled:opacity-50 transition-colors"
+                      >
+                        {actionLoading[expKey] === 'reject' ? '…' : 'Reject'}
+                      </button>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Quick Actions */}
+      <div className="bg-white/70 backdrop-blur-xl rounded-2xl border border-white/50 shadow-lg p-5">
+        <h2 className="text-lg font-bold text-slate-900 mb-4">Quick Actions</h2>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <QuickAction
+            icon={UserPlus}
+            label="Add Employee"
+            gradient="linear-gradient(135deg, #6366F1, #8B5CF6)"
+            onClick={() => navigate('/employees')}
+          />
+          <QuickAction
+            icon={DollarSign}
+            label="Process Payroll"
+            gradient="linear-gradient(135deg, #10B981, #059669)"
+            onClick={() => navigate('/payroll')}
+          />
+          <QuickAction
+            icon={BarChart2}
+            label="View Reports"
+            gradient="linear-gradient(135deg, #06B6D4, #0EA5E9)"
+            onClick={() => navigate('/reports')}
+          />
+          <QuickAction
+            icon={Settings}
+            label="System Settings"
+            gradient="linear-gradient(135deg, #F59E0B, #EF4444)"
+            onClick={() => navigate('/settings')}
+          />
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── EMPLOYEE DASHBOARD ───────────────────────────────────────────────────────
+function EmployeeDashboard() {
+  const navigate = useNavigate()
+  const { user } = useAuth()
+
+  const [loading, setLoading] = useState(true)
+  const [leaveBalance, setLeaveBalance] = useState([])
+  const [recentLeaves, setRecentLeaves] = useState([])
+  const [announcements, setAnnouncements] = useState([])
+  const [dismissedIds, setDismissedIds] = useState(() => {
+    try { return JSON.parse(sessionStorage.getItem('dismissed_announcements') || '[]') } catch { return [] }
+  })
+  const [error, setError] = useState(null)
+
+  const empId = user?.employee_id ?? 'E001'
+  const now = new Date()
+  const firstName = user?.full_name?.split(' ')[0] ?? 'there'
+
+  useEffect(() => {
+    async function fetchAll() {
+      setLoading(true)
+      setError(null)
+      try {
+        const [leaveReqRes, balRes, annRes] = await Promise.allSettled([
+          leaves.getRequests({ status: 'submitted', page_size: 5 }),
+          leaves.getBalance(empId),
+          announcementAPI.getAll(),
+        ])
+
+        if (leaveReqRes.status === 'fulfilled') {
+          const d = leaveReqRes.value.data
+          const list = d.results ?? d.data ?? (Array.isArray(d) ? d : [])
+          setRecentLeaves(list.slice(0, 5))
+        }
+        if (balRes.status === 'fulfilled') {
+          const d = balRes.value.data
+          setLeaveBalance(d.balances ?? d.data ?? (Array.isArray(d) ? d : []))
         }
         if (annRes.status === 'fulfilled') {
           const d = annRes.value.data
@@ -201,18 +529,10 @@ export default function Dashboard() {
   }
 
   const visibleAnnouncements = announcements.filter((a) => !dismissedIds.includes(a.id))
-  const latestCycle = payrollCycles[0]
-  const totalPayroll = latestCycle?.total_net_pay ?? latestCycle?.total_amount ?? 0
-  const thisMonthCommission =
-    commissionSummary?.total ??
-    commissionEntries
-      .filter((e) => e.status === 'approved')
-      .reduce((s, e) => s + parseFloat(e.commission_amount ?? 0), 0)
-  const firstName = user?.full_name?.split(' ')[0] ?? 'there'
 
   return (
     <div className="animate-fade-in-up space-y-6">
-      {/* ── Announcements ── */}
+      {/* Announcements */}
       {visibleAnnouncements.length > 0 && (
         <div className="space-y-2 animate-stagger-1">
           {visibleAnnouncements.map((ann) => (
@@ -237,10 +557,10 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* ── Greeting bar ── */}
+      {/* Greeting bar */}
       <div className="flex items-center justify-between animate-stagger-1">
         <div>
-          <p className="stat-label text-indigo-400">{getGreeting()}</p>
+          <p className="text-xs font-semibold uppercase tracking-widest text-indigo-400">{getGreeting()}</p>
           <h1 className="text-3xl font-black text-slate-900">{firstName} 👋</h1>
         </div>
         <div className="text-right hidden sm:block">
@@ -251,7 +571,7 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* ── Error banner ── */}
+      {/* Error banner */}
       {error && (
         <div className="flex items-center gap-2 rounded-2xl bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800">
           <AlertCircle className="h-4 w-4 flex-shrink-0" />
@@ -259,51 +579,10 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* ── Bento Row 1: Stat cards ── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 animate-stagger-2">
-        {isManager && (
-          <BentoStatCard
-            icon={Users}
-            label="TOTAL EMPLOYEES"
-            value={empCount}
-            sub="Active team members"
-            gradient="gradient-indigo"
-            loading={loading}
-          />
-        )}
-        <BentoStatCard
-          icon={Clock}
-          label="PENDING APPROVALS"
-          value={pendingLeaves.length}
-          sub="Leaves awaiting action"
-          gradient="gradient-amber"
-          loading={loading}
-          pulse={pendingLeaves.length > 0}
-        />
-        {isManager && (
-          <BentoStatCard
-            icon={DollarSign}
-            label="THIS MONTH PAYROLL"
-            value={formatINR(totalPayroll)}
-            sub="Net disbursement"
-            gradient="gradient-cyan"
-            loading={loading}
-          />
-        )}
-        <BentoStatCard
-          icon={TrendingUp}
-          label="MY COMMISSION"
-          value={formatINR(thisMonthCommission)}
-          sub={`${now.toLocaleString('en-IN', { month: 'short' })} ${curYear}`}
-          gradient="gradient-green"
-          loading={loading}
-        />
-      </div>
-
-      {/* ── Bento Row 2: Leave balance + Recent requests ── */}
+      {/* Leave balance + Recent requests */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 animate-stagger-3">
         {/* Leave Balance */}
-        <div className="glass-card p-5 lg:col-span-2">
+        <div className="bg-white/70 backdrop-blur-xl rounded-2xl border border-white/50 shadow-lg p-5 lg:col-span-2">
           <div className="flex items-center gap-2 mb-4">
             <CalendarDays className="h-5 w-5 text-indigo-500" />
             <h2 className="text-xl font-bold text-slate-900">My Leave Balance</h2>
@@ -329,7 +608,7 @@ export default function Dashboard() {
         </div>
 
         {/* Recent Requests */}
-        <div className="glass-card p-5 flex flex-col">
+        <div className="bg-white/70 backdrop-blur-xl rounded-2xl border border-white/50 shadow-lg p-5 flex flex-col">
           <div className="flex items-center gap-2 mb-4">
             <List className="h-5 w-5 text-indigo-500" />
             <h2 className="text-xl font-bold text-slate-900">Recent Requests</h2>
@@ -360,94 +639,49 @@ export default function Dashboard() {
           )}
           <button
             onClick={() => navigate('/leaves/request')}
-            className="btn-primary w-full mt-4 justify-center"
+            className="px-4 py-2 rounded-full text-white text-sm font-semibold w-full mt-4 text-center"
+            style={{ background: 'linear-gradient(135deg, #6366F1, #8B5CF6)' }}
           >
             Apply Leave
           </button>
         </div>
       </div>
 
-      {/* ── Bento Row 3: Quick Actions + Recent Activity ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 animate-stagger-4">
-        {/* Quick Actions */}
-        <div className="glass-card p-5">
-          <h2 className="text-xl font-bold text-slate-900 mb-4">Quick Actions</h2>
-          <div className="grid grid-cols-2 gap-3">
-            <QuickAction
-              icon={CalendarPlus}
-              label="Apply Leave"
-              gradient="from-indigo-500 to-indigo-600"
-              onClick={() => navigate('/leaves/request')}
-            />
-            <QuickAction
-              icon={FileText}
-              label="View Salary Slip"
-              gradient="from-violet-500 to-violet-600"
-              onClick={() => navigate(`/employees/${empId}`)}
-            />
-            <QuickAction
-              icon={TrendingUp}
-              label="Log Commission"
-              gradient="from-amber-500 to-orange-500"
-              onClick={() => navigate('/commission')}
-            />
-            <QuickAction
-              icon={Receipt}
-              label="View Reports"
-              gradient="from-cyan-500 to-cyan-600"
-              onClick={() => navigate('/reports')}
-            />
-          </div>
-        </div>
-
-        {/* Recent Commission Activity */}
-        <div className="glass-card p-5">
-          <div className="flex items-center gap-2 mb-4">
-            <Activity className="h-5 w-5 text-indigo-500" />
-            <h2 className="text-xl font-bold text-slate-900">Recent Activity</h2>
-          </div>
-          {loading ? (
-            <div className="space-y-3">
-              {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-10" />)}
-            </div>
-          ) : commissionEntries.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-10 text-slate-400">
-              <Activity className="h-10 w-10 mb-3 text-slate-300" />
-              <p className="text-sm">No recent activity</p>
-            </div>
-          ) : (
-            <div className="relative pl-4 space-y-3">
-              {/* Timeline line */}
-              <div className="absolute left-0 top-2 bottom-2 w-0.5 bg-gradient-to-b from-indigo-400 to-violet-400 rounded-full" />
-              {commissionEntries.slice(0, 5).map((e, i) => (
-                <div key={e.id ?? i} className="relative">
-                  <div className="absolute -left-[18px] top-1.5 h-2.5 w-2.5 rounded-full bg-indigo-500 border-2 border-white" />
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <p className="text-xs font-semibold text-slate-800 truncate">{e.description ?? 'Commission entry'}</p>
-                      {e.deal_value && (
-                        <p className="text-xs text-slate-500">Deal: {formatINR(e.deal_value)}</p>
-                      )}
-                    </div>
-                    <div className="text-right flex-shrink-0">
-                      <p className="text-xs font-bold text-indigo-700">{formatINR(e.commission_amount ?? 0)}</p>
-                      <StatusBadge status={e.status ?? 'pending'} />
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-          {commissionEntries.length > 0 && (
-            <button
-              onClick={() => navigate('/commission')}
-              className="btn-glass w-full mt-4 justify-center"
-            >
-              View all <ArrowRight className="h-4 w-4 ml-1" />
-            </button>
-          )}
+      {/* Quick Actions */}
+      <div className="bg-white/70 backdrop-blur-xl rounded-2xl border border-white/50 shadow-lg p-5 animate-stagger-4">
+        <h2 className="text-xl font-bold text-slate-900 mb-4">Quick Actions</h2>
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          <QuickAction
+            icon={CalendarPlus}
+            label="Apply Leave"
+            gradient="linear-gradient(135deg, #6366F1, #8B5CF6)"
+            onClick={() => navigate('/leaves/request')}
+          />
+          <QuickAction
+            icon={FileText}
+            label="View Salary Slip"
+            gradient="linear-gradient(135deg, #7C3AED, #6D28D9)"
+            onClick={() => navigate(`/employees/${empId}`)}
+          />
+          <QuickAction
+            icon={Receipt}
+            label="View Reports"
+            gradient="linear-gradient(135deg, #06B6D4, #0EA5E9)"
+            onClick={() => navigate('/reports')}
+          />
         </div>
       </div>
     </div>
   )
+}
+
+// ─── Main component ───────────────────────────────────────────────────────────
+export default function Dashboard() {
+  const { user } = useAuth()
+  const isAdmin = ['super_admin', 'hr'].includes(user?.role)
+
+  if (isAdmin) {
+    return <AdminDashboard />
+  }
+  return <EmployeeDashboard />
 }
