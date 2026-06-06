@@ -10,6 +10,7 @@ import {
   Calendar,
 } from 'lucide-react'
 import { payroll, employees } from '../api.js'
+import { useAuth } from '../context/AuthContext'
 import LoadingSpinner from '../components/LoadingSpinner.jsx'
 import StatusBadge from '../components/StatusBadge.jsx'
 import Modal from '../components/Modal.jsx'
@@ -33,6 +34,173 @@ function cycleBorderColor(status) {
 }
 
 export default function PayrollManagement() {
+  const { user } = useAuth()
+  const isAdmin = ['hr', 'finance', 'super_admin'].includes(user?.role)
+
+  if (!isAdmin) {
+    return <EmployeePayslipView user={user} />
+  }
+
+  return <AdminPayrollView />
+}
+
+// ─── Employee Payslip View ─────────────────────────────────────────────────────
+function EmployeePayslipView({ user }) {
+  const [slips, setSlips] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [expandedId, setExpandedId] = useState(null)
+  const [year, setYear] = useState(new Date().getFullYear())
+
+  useEffect(() => {
+    if (!user?.id) return
+    setLoading(true)
+    payroll.getEmployeeSlips(user.id, { year }).then((res) => {
+      const d = res.data
+      setSlips(d.items ?? d.results ?? (Array.isArray(d) ? d : []))
+    }).catch(() => {
+      toast.error('Failed to load payslips')
+    }).finally(() => setLoading(false))
+  }, [user?.id, year])
+
+  const years = [new Date().getFullYear(), new Date().getFullYear() - 1]
+
+  return (
+    <div className="animate-fade-in-up space-y-5">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-black text-slate-900">My Payslips</h1>
+          <p className="text-sm text-slate-500 mt-0.5">
+            {user?.full_name} &bull; {user?.employee_id}
+          </p>
+        </div>
+        <select
+          value={year}
+          onChange={(e) => setYear(Number(e.target.value))}
+          className="px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+        >
+          {years.map((y) => <option key={y} value={y}>FY {y}</option>)}
+        </select>
+      </div>
+
+      {loading ? (
+        <div className="flex justify-center py-20"><LoadingSpinner text="Loading payslips…" /></div>
+      ) : slips.length === 0 ? (
+        <div className="glass-card text-center py-20 text-slate-400">
+          <DollarSign className="h-10 w-10 mx-auto mb-3 text-slate-300" />
+          <p className="text-sm font-medium">No payslips found for {year}</p>
+          <p className="text-xs mt-1">Payslips appear here once your payroll is processed</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {slips.map((slip) => {
+            const isOpen = expandedId === slip.id
+            const monthName = MONTHS[(slip.month ?? 1) - 1]
+            return (
+              <div key={slip.id} className="glass-card overflow-hidden p-0">
+                {/* Payslip header row */}
+                <button
+                  onClick={() => setExpandedId(isOpen ? null : slip.id)}
+                  className="w-full flex items-center gap-4 px-5 py-4 hover:bg-indigo-50/20 transition-colors text-left"
+                >
+                  <div
+                    className="h-11 w-11 rounded-xl flex items-center justify-center flex-shrink-0 text-white font-bold text-sm"
+                    style={{ background: 'linear-gradient(135deg, #6366F1, #8B5CF6)' }}
+                  >
+                    {monthName.slice(0, 3).toUpperCase()}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-bold text-slate-900">{monthName} {slip.year}</p>
+                    <p className="text-xs text-slate-500">
+                      Gross: {formatINR(slip.gross_earnings ?? 0)} &bull; Deductions: {formatINR(slip.total_deductions ?? 0)}
+                    </p>
+                  </div>
+                  <div className="text-right flex-shrink-0">
+                    <p className="text-lg font-black text-emerald-600">{formatINR(slip.net_pay ?? 0)}</p>
+                    <StatusBadge status={slip.status ?? 'processed'} />
+                  </div>
+                  <ChevronRight className={`h-4 w-4 text-slate-400 flex-shrink-0 transition-transform ${isOpen ? 'rotate-90' : ''}`} />
+                </button>
+
+                {/* Expanded breakdown */}
+                {isOpen && (
+                  <div className="border-t border-slate-100 px-5 py-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                      {/* Earnings */}
+                      <div>
+                        <p className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-3">Earnings</p>
+                        <div className="space-y-2">
+                          {[
+                            ['Basic Salary', slip.basic_salary],
+                            ['HRA', slip.hra],
+                            ['DA', slip.da],
+                            ['Conveyance', slip.conveyance],
+                            ['Medical', slip.medical],
+                            ['Special Allowance', slip.special_allowance],
+                            ['LTA', slip.lta],
+                            ['Other Allowances', slip.other_allowances],
+                            ...(slip.commission_amount > 0 ? [['Commission', slip.commission_amount]] : []),
+                          ].filter(([, v]) => v > 0).map(([label, val]) => (
+                            <div key={label} className="flex justify-between text-sm">
+                              <span className="text-slate-500">{label}</span>
+                              <span className="font-medium text-slate-800">{formatINR(val)}</span>
+                            </div>
+                          ))}
+                          <div className="flex justify-between text-sm font-bold border-t border-slate-200 pt-2 mt-1">
+                            <span className="text-slate-700">Gross Earnings</span>
+                            <span className="text-slate-900">{formatINR(slip.gross_earnings ?? 0)}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Deductions */}
+                      <div>
+                        <p className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-3">Deductions</p>
+                        <div className="space-y-2">
+                          {[
+                            ['PF (Employee)', slip.pf_employee],
+                            ['ESI (Employee)', slip.esi_employee],
+                            ['Professional Tax', slip.professional_tax],
+                            ['Income Tax (TDS)', slip.income_tax],
+                            ['LWP Deduction', slip.unpaid_leave_deduction],
+                            ['Other Deductions', slip.other_deductions],
+                          ].filter(([, v]) => v > 0).map(([label, val]) => (
+                            <div key={label} className="flex justify-between text-sm">
+                              <span className="text-slate-500">{label}</span>
+                              <span className="font-medium text-red-600">−{formatINR(val)}</span>
+                            </div>
+                          ))}
+                          <div className="flex justify-between text-sm font-bold border-t border-slate-200 pt-2 mt-1">
+                            <span className="text-slate-700">Total Deductions</span>
+                            <span className="text-red-600">−{formatINR(slip.total_deductions ?? 0)}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Net Pay banner */}
+                    <div className="mt-4 rounded-xl p-4 flex items-center justify-between" style={{ background: 'linear-gradient(135deg, #10B981, #059669)' }}>
+                      <div>
+                        <p className="text-xs font-bold uppercase tracking-widest text-white/70">Net Pay</p>
+                        <p className="text-2xl font-black text-white">{formatINR(slip.net_pay ?? 0)}</p>
+                      </div>
+                      <div className="text-right text-white/80 text-xs">
+                        <p>YTD Earnings: {formatINR(slip.ytd_earnings ?? 0)}</p>
+                        <p>YTD Tax: {formatINR(slip.ytd_tax ?? 0)}</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Admin Payroll View ────────────────────────────────────────────────────────
+function AdminPayrollView() {
   const navigate = useNavigate()
   const [loading, setLoading] = useState(true)
   const [cycles, setCycles] = useState([])

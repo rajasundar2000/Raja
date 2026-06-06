@@ -51,14 +51,7 @@ export default function App() {
                 <Route path="/leaves" element={<LeaveManagement />} />
                 <Route path="/leaves/request" element={<LeaveRequest />} />
 
-                <Route
-                  path="/payroll"
-                  element={
-                    <ProtectedRoute allowedRoles={['hr', 'finance', 'super_admin']}>
-                      <PayrollManagement />
-                    </ProtectedRoute>
-                  }
-                />
+                <Route path="/payroll" element={<PayrollManagement />} />
                 <Route
                   path="/payroll/:id"
                   element={

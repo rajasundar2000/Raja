@@ -63,16 +63,16 @@ export const leaves = {
 
 // ─── Payroll ──────────────────────────────────────────────────────────────────
 export const payroll = {
-  getCycles: (params) => api.get('/payroll/cycles/', { params }),
-  createCycle: (data) => api.post('/payroll/cycles/', data),
-  generateSlips: (cycleId) => api.post(`/payroll/cycles/${cycleId}/generate/`),
-  getSlips: (cycleId) => api.get(`/payroll/cycles/${cycleId}/slips/`),
-  getSlip: (id) => api.get(`/payroll/slips/${id}/`),
-  approveCycle: (id) => api.post(`/payroll/cycles/${id}/approve/`),
-  getEmployeeSlips: (empId) => api.get(`/payroll/employee/${empId}/slips/`),
-  createLoan: (data) => api.post('/payroll/loans/', data),
-  getLoans: (params) => api.get('/payroll/loans/', { params }),
-  approveLoan: (id) => api.post(`/payroll/loans/${id}/approve/`),
+  getCycles: (params) => api.get('/payroll-cycles', { params }),
+  createCycle: (data) => api.post('/payroll-cycles', data),
+  generateSlips: (cycleId) => api.post(`/payroll-cycles/${cycleId}/generate`),
+  getSlips: (cycleId) => api.get(`/payroll-cycles/${cycleId}/salary-slips`),
+  getSlip: (id) => api.get(`/salary-slips/${id}`),
+  approveCycle: (id) => api.post(`/payroll-cycles/${id}/approve`),
+  getEmployeeSlips: (empId, params) => api.get(`/employees/${empId}/salary-slips`, { params }),
+  createLoan: (data) => api.post('/loans', data),
+  getLoans: (params) => api.get('/loans', { params }),
+  approveLoan: (id) => api.put(`/loans/${id}/approve`),
 }
 
 // ─── Commission ───────────────────────────────────────────────────────────────
