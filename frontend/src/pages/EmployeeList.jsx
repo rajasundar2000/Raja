@@ -121,9 +121,11 @@ export default function EmployeeList() {
       const list = d.items ?? d.results ?? d.data ?? (Array.isArray(d) ? d : [])
       setData(list)
       setTotal(d.total ?? d.count ?? list.length)
-    } catch {
-      toast.error('Failed to load employees')
+    } catch (err) {
+      const msg = err?.userMessage ?? err?.message ?? 'Failed to load employees'
+      toast.error(msg)
       setData([])
+      setTotal(0)
     } finally {
       setLoading(false)
     }
@@ -257,8 +259,9 @@ export default function EmployeeList() {
       {/* ── Table ── */}
       <div className="glass-card overflow-hidden p-0 animate-stagger-3">
         {loading ? (
-          <div className="flex justify-center py-20">
+          <div className="flex flex-col items-center justify-center py-20 gap-2">
             <LoadingSpinner text="Loading employees…" />
+            <p className="text-xs text-slate-400 mt-2">If this takes more than 30 seconds, the server may be waking up. Please wait.</p>
           </div>
         ) : data.length === 0 ? (
           <div className="text-center py-20 text-slate-400">

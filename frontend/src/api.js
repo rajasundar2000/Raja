@@ -5,7 +5,7 @@ const API_URL = import.meta.env.VITE_API_URL || 'https://elite-recruit-payroll-s
 const api = axios.create({
   baseURL: API_URL,
   headers: { 'Content-Type': 'application/json' },
-  timeout: 10000,
+  timeout: 60000,
 })
 
 // Initialise auth token from localStorage on app start
@@ -34,12 +34,12 @@ export const authAPI = {
 
 // ─── Employees ────────────────────────────────────────────────────────────────
 export const employees = {
-  getAll: (params) => api.get('/employees/', { params }),
-  getOne: (id) => api.get(`/employees/${id}/`),
-  create: (data) => api.post('/employees/', data),
-  update: (id, data) => api.patch(`/employees/${id}/`, data),
-  getSalaryStructure: (id) => api.get(`/employees/${id}/salary-structure/`),
-  setSalaryStructure: (id, data) => api.post(`/employees/${id}/salary-structure/`, data),
+  getAll: (params) => api.get('/employees', { params }),
+  getOne: (id) => api.get(`/employees/${id}`),
+  create: (data) => api.post('/employees', data),
+  update: (id, data) => api.patch(`/employees/${id}`, data),
+  getSalaryStructure: (id) => api.get(`/employees/${id}/salary-structure`),
+  setSalaryStructure: (id, data) => api.post(`/employees/${id}/salary-structure`, data),
 }
 
 // ─── Leaves ───────────────────────────────────────────────────────────────────
