@@ -34,6 +34,59 @@ function getGreeting() {
   return 'Good evening'
 }
 
+// ─── Live dual timezone clock ─────────────────────────────────────────────────
+function DualClock() {
+  const [now, setNow] = useState(new Date())
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 1000)
+    return () => clearInterval(id)
+  }, [])
+
+  function fmt(tz) {
+    return now.toLocaleTimeString('en-US', {
+      timeZone: tz,
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: true,
+    })
+  }
+  function fmtDate(tz) {
+    return now.toLocaleDateString('en-US', {
+      timeZone: tz,
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric',
+    })
+  }
+
+  return (
+    <div className="hidden sm:flex items-center gap-3">
+      {/* IST */}
+      <div className="text-right">
+        <div className="flex items-center gap-1.5 justify-end">
+          <span className="text-xs font-bold uppercase tracking-widest text-indigo-400">IST</span>
+          <span className="h-2 w-2 rounded-full bg-indigo-400 animate-pulse" />
+        </div>
+        <p className="text-sm font-bold text-slate-800 tabular-nums leading-tight">{fmt('Asia/Kolkata')}</p>
+        <p className="text-xs text-slate-400">{fmtDate('Asia/Kolkata')}</p>
+      </div>
+
+      <div className="w-px h-10 bg-slate-200" />
+
+      {/* EST/EDT */}
+      <div className="text-right">
+        <div className="flex items-center gap-1.5 justify-end">
+          <span className="text-xs font-bold uppercase tracking-widest text-amber-500">EST</span>
+          <span className="h-2 w-2 rounded-full bg-amber-400 animate-pulse" />
+        </div>
+        <p className="text-sm font-bold text-slate-800 tabular-nums leading-tight">{fmt('America/New_York')}</p>
+        <p className="text-xs text-slate-400">{fmtDate('America/New_York')}</p>
+      </div>
+    </div>
+  )
+}
+
 // ─── Skeleton loader ───────────────────────────────────────────────────────────
 function Skeleton({ className = '' }) {
   return <div className={`animate-pulse rounded-xl bg-white/30 ${className}`} />
@@ -137,7 +190,6 @@ function AdminDashboard() {
   const [error, setError] = useState(null)
   const [actionLoading, setActionLoading] = useState({})
 
-  const now = new Date()
   const firstName = ''
 
   useEffect(() => {
@@ -254,12 +306,7 @@ function AdminDashboard() {
           <p className="text-xs font-semibold uppercase tracking-widest text-indigo-400">{getGreeting()}</p>
           <h1 className="text-3xl font-black text-slate-900">Admin Dashboard</h1>
         </div>
-        <div className="text-right hidden sm:block">
-          <p className="text-sm font-medium text-slate-500">
-            {now.toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' })}
-          </p>
-          <p className="text-xs text-slate-400">FY 2025–26</p>
-        </div>
+        <DualClock />
       </div>
 
       {/* Error */}
@@ -484,7 +531,6 @@ function EmployeeDashboard() {
   const [error, setError] = useState(null)
 
   const empId = user?.employee_id ?? 'E001'
-  const now = new Date()
   const firstName = user?.full_name?.split(' ')[0] ?? 'there'
 
   useEffect(() => {
@@ -563,12 +609,7 @@ function EmployeeDashboard() {
           <p className="text-xs font-semibold uppercase tracking-widest text-indigo-400">{getGreeting()}</p>
           <h1 className="text-3xl font-black text-slate-900">{firstName} 👋</h1>
         </div>
-        <div className="text-right hidden sm:block">
-          <p className="text-sm font-medium text-slate-500">
-            {now.toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' })}
-          </p>
-          <p className="text-xs text-slate-400">FY 2025–26</p>
-        </div>
+        <DualClock />
       </div>
 
       {/* Error banner */}
