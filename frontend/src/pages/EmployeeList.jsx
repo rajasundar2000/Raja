@@ -25,7 +25,7 @@ const DEPARTMENTS = [
   'Engineering', 'HR', 'Finance', 'Sales', 'Marketing', 'Operations',
   'Legal', 'IT', 'Product', 'Customer Support',
 ]
-const ROLES = ['employee', 'manager', 'hr', 'admin']
+const ROLES = ['employee', 'manager', 'hr', 'finance', 'super_admin']
 const DESIGNATIONS = [
   'Software Engineer', 'Senior Engineer', 'Tech Lead', 'Manager',
   'HR Executive', 'HR Manager', 'Accountant', 'Sales Executive',
@@ -33,15 +33,18 @@ const DESIGNATIONS = [
 ]
 
 const EMPTY_FORM = {
-  employee_id: '', first_name: '', last_name: '', email: '', phone: '',
+  employee_id: '', full_name: '', email: '', phone: '',
   department: '', designation: '', role: 'employee', date_of_joining: '',
-  date_of_birth: '', pan_number: '', aadhaar_number: '', bank_account_number: '',
-  bank_name: '', ifsc_code: '', uan_number: '', status: 'active',
+  date_of_birth: '', pan_number: '', aadhaar_number: '', bank_account_last4: '',
+  bank_ifsc: '', state: 'Karnataka',
 }
 
 // Colored initials avatar
 function Avatar({ name }) {
-  const initials = (name ?? '?').split(' ').map((p) => p[0]).join('').slice(0, 2).toUpperCase()
+  const parts = (name ?? '?').trim().split(' ').filter(Boolean)
+  const initials = parts.length >= 2
+    ? (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+    : (name ?? '?').slice(0, 2).toUpperCase()
   return (
     <div className="h-9 w-9 rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
       {initials}
@@ -109,14 +112,15 @@ export default function EmployeeList() {
   const fetchEmployees = useCallback(async () => {
     setLoading(true)
     try {
-      const params = { page, page_size: PAGE_SIZE }
+      const skip = (page - 1) * PAGE_SIZE
+      const params = { skip, limit: PAGE_SIZE }
       if (search) params.search = search
       if (deptFilter) params.department = deptFilter
       const res = await employees.getAll(params)
       const d = res.data
-      const list = d.results ?? d.data ?? (Array.isArray(d) ? d : [])
+      const list = d.items ?? d.results ?? d.data ?? (Array.isArray(d) ? d : [])
       setData(list)
-      setTotal(d.count ?? d.total ?? list.length)
+      setTotal(d.total ?? d.count ?? list.length)
     } catch {
       toast.error('Failed to load employees')
       setData([])
@@ -133,13 +137,15 @@ export default function EmployeeList() {
 
   async function handleCreate(e) {
     e.preventDefault()
-    if (!form.first_name || !form.last_name || !form.email || !form.employee_id) {
+    if (!form.full_name || !form.email || !form.employee_id) {
       toast.error('Please fill required fields')
       return
     }
     setSaving(true)
     try {
-      await employees.create(form)
+      const payload = { ...form }
+      if (!payload.state) payload.state = 'Karnataka'
+      await employees.create(payload)
       toast.success('Employee created successfully!')
       setShowModal(false)
       setForm(EMPTY_FORM)
@@ -150,6 +156,8 @@ export default function EmployeeList() {
       setSaving(false)
     }
   }
+
+  const fieldCls = "w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-800 text-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
 
   function Field({ label, name, type = 'text', required, options }) {
     return (
@@ -162,7 +170,7 @@ export default function EmployeeList() {
             name={name}
             value={form[name]}
             onChange={(e) => setForm((f) => ({ ...f, [name]: e.target.value }))}
-            className="input-glass"
+            className={fieldCls}
           >
             <option value="">Select…</option>
             {options.map((o) => <option key={o} value={o}>{o}</option>)}
@@ -174,7 +182,7 @@ export default function EmployeeList() {
             value={form[name]}
             onChange={(e) => setForm((f) => ({ ...f, [name]: e.target.value }))}
             required={required}
-            className="input-glass"
+            className={fieldCls}
           />
         )}
       </div>
@@ -214,7 +222,7 @@ export default function EmployeeList() {
             placeholder="Search by name or ID…"
             value={search}
             onChange={handleSearch}
-            className="input-glass pl-10"
+            className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-800 text-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
           />
         </div>
 
@@ -277,15 +285,13 @@ export default function EmployeeList() {
                     <tr
                       key={emp.id ?? emp.employee_id}
                       className={`hover:bg-indigo-50/30 cursor-pointer transition-colors ${idx !== data.length - 1 ? 'border-b border-slate-100' : ''}`}
-                      onClick={() => navigate(`/employees/${emp.employee_id ?? emp.id}`)}
+                      onClick={() => navigate(`/employees/${emp.id ?? emp.employee_id}`)}
                     >
                       <td className="px-5 py-3">
                         <div className="flex items-center gap-3">
-                          <Avatar name={`${emp.first_name} ${emp.last_name}`} />
+                          <Avatar name={emp.full_name} />
                           <div>
-                            <p className="font-semibold text-slate-900">
-                              {emp.first_name} {emp.last_name}
-                            </p>
+                            <p className="font-semibold text-slate-900">{emp.full_name}</p>
                             <p className="text-xs font-mono text-indigo-600 font-semibold">{emp.employee_id}</p>
                           </div>
                         </div>
@@ -299,11 +305,11 @@ export default function EmployeeList() {
                       <td className="px-5 py-3 text-slate-600">{emp.designation ?? '—'}</td>
                       <td className="px-5 py-3">
                         <span className="text-xs text-slate-500 capitalize bg-slate-100 px-2 py-1 rounded-full">
-                          {emp.role ?? '—'}
+                          {emp.role?.replace('_', ' ') ?? '—'}
                         </span>
                       </td>
                       <td className="px-5 py-3">
-                        <StatusBadge status={emp.status ?? 'active'} />
+                        <StatusBadge status={emp.is_active ? 'active' : 'inactive'} />
                       </td>
                       <td className="px-5 py-3 text-right">
                         <div className="flex items-center justify-end gap-2">
@@ -315,7 +321,7 @@ export default function EmployeeList() {
                             <KeyRound className="h-3.5 w-3.5" />
                           </button>
                           <button
-                            onClick={(e) => { e.stopPropagation(); navigate(`/employees/${emp.employee_id ?? emp.id}`) }}
+                            onClick={(e) => { e.stopPropagation(); navigate(`/employees/${emp.id ?? emp.employee_id}`) }}
                             className="text-indigo-600 hover:text-indigo-800 text-xs font-semibold hover:underline"
                           >
                             View Details
@@ -334,14 +340,14 @@ export default function EmployeeList() {
                 <div
                   key={emp.id ?? emp.employee_id}
                   className="p-4 hover:bg-indigo-50/30 cursor-pointer transition-colors"
-                  onClick={() => navigate(`/employees/${emp.employee_id ?? emp.id}`)}
+                  onClick={() => navigate(`/employees/${emp.id ?? emp.employee_id}`)}
                 >
                   <div className="flex items-center gap-3">
-                    <Avatar name={`${emp.first_name} ${emp.last_name}`} />
+                    <Avatar name={emp.full_name} />
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <p className="font-semibold text-slate-900">{emp.first_name} {emp.last_name}</p>
-                        <StatusBadge status={emp.status ?? 'active'} />
+                        <p className="font-semibold text-slate-900">{emp.full_name}</p>
+                        <StatusBadge status={emp.is_active ? 'active' : 'inactive'} />
                       </div>
                       <p className="text-xs text-slate-500">{emp.designation ?? '—'}</p>
                     </div>
@@ -389,14 +395,14 @@ export default function EmployeeList() {
       <Modal
         open={resetPasswordModal}
         onClose={() => setResetPasswordModal(false)}
-        title={`Reset Password for ${resetTargetEmp ? `${resetTargetEmp.first_name} ${resetTargetEmp.last_name}` : ''}`}
+        title={`Reset Password — ${resetTargetEmp?.full_name ?? ''}`}
         size="sm"
       >
         <form onSubmit={handleResetPassword} className="space-y-4">
           <p className="text-sm text-slate-500">
             Setting a new password for{' '}
             <span className="font-semibold text-slate-700">
-              {resetTargetEmp?.first_name} {resetTargetEmp?.last_name}
+              {resetTargetEmp?.full_name}
             </span>{' '}
             ({resetTargetEmp?.employee_id})
           </p>
@@ -455,13 +461,11 @@ export default function EmployeeList() {
             </h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Field label="Employee ID" name="employee_id" required />
+              <Field label="Full Name" name="full_name" required />
               <Field label="Email" name="email" type="email" required />
-              <Field label="First Name" name="first_name" required />
-              <Field label="Last Name" name="last_name" required />
               <Field label="Phone" name="phone" />
               <Field label="Date of Birth" name="date_of_birth" type="date" />
               <Field label="Date of Joining" name="date_of_joining" type="date" />
-              <Field label="Status" name="status" options={['active', 'inactive']} />
             </div>
           </section>
 
@@ -473,6 +477,7 @@ export default function EmployeeList() {
               <Field label="Department" name="department" options={DEPARTMENTS} />
               <Field label="Designation" name="designation" options={DESIGNATIONS} />
               <Field label="Role" name="role" options={ROLES} />
+              <Field label="State (for PT)" name="state" options={['Karnataka', 'Maharashtra', 'Tamil Nadu', 'Telangana', 'West Bengal', 'Gujarat', 'Andhra Pradesh', 'Kerala', 'Other']} />
             </div>
           </section>
 
@@ -482,11 +487,9 @@ export default function EmployeeList() {
             </h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Field label="PAN Number" name="pan_number" />
-              <Field label="Aadhaar Number" name="aadhaar_number" />
-              <Field label="UAN Number" name="uan_number" />
-              <Field label="Bank Name" name="bank_name" />
-              <Field label="Account Number" name="bank_account_number" />
-              <Field label="IFSC Code" name="ifsc_code" />
+              <Field label="Aadhaar (last 4 digits)" name="aadhaar_number" />
+              <Field label="Bank A/C (last 4 digits)" name="bank_account_last4" />
+              <Field label="IFSC Code" name="bank_ifsc" />
             </div>
           </section>
 
