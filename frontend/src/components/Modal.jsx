@@ -24,7 +24,7 @@ export default function Modal({ open, onClose, title, children, size = 'md' }) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end md:items-center justify-center"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 md:p-6"
       onClick={onClose}
     >
       {/* Backdrop */}
@@ -40,8 +40,7 @@ export default function Modal({ open, onClose, title, children, size = 'md' }) {
       {/* Dialog */}
       <div
         className={`relative w-full ${desktopSizes[size]} max-h-[90vh] flex flex-col
-          rounded-t-3xl md:rounded-[20px] overflow-hidden
-          animate-slide-up md:animate-none`}
+          rounded-[20px] overflow-hidden`}
         style={{
           background: 'rgba(255,255,255,0.7)',
           backdropFilter: 'blur(20px)',
@@ -51,11 +50,6 @@ export default function Modal({ open, onClose, title, children, size = 'md' }) {
         }}
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Drag handle (mobile only) */}
-        <div className="flex justify-center pt-3 pb-1 md:hidden flex-shrink-0">
-          <div className="h-1 w-10 rounded-full bg-slate-300" />
-        </div>
-
         {/* Header */}
         <div
           className="flex items-center justify-between px-6 py-4 flex-shrink-0 border-b"
@@ -84,20 +78,6 @@ export default function Modal({ open, onClose, title, children, size = 'md' }) {
         </div>
       </div>
 
-      <style>{`
-        @keyframes slideUp {
-          from { transform: translateY(100%); }
-          to   { transform: translateY(0); }
-        }
-        .animate-slide-up {
-          animation: slideUp 0.28s cubic-bezier(0.32,0.72,0,1);
-        }
-        @media (min-width: 768px) {
-          .animate-slide-up {
-            animation: none;
-          }
-        }
-      `}</style>
     </div>
   )
 }
