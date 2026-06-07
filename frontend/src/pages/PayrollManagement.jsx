@@ -232,12 +232,12 @@ function AdminPayrollView() {
     setLoading(true)
     try {
       const [cycleRes, empRes] = await Promise.allSettled([
-        payroll.getCycles({ page_size: 50 }),
-        employees.getAll({ page_size: 1 }),
+        payroll.getCycles({ skip: 0, limit: 50 }),
+        employees.getAll({ skip: 0, limit: 1 }),
       ])
       if (cycleRes.status === 'fulfilled') {
         const d = cycleRes.value.data
-        const list = d.results ?? d.data ?? (Array.isArray(d) ? d : [])
+        const list = d.items ?? d.results ?? d.data ?? (Array.isArray(d) ? d : [])
         setCycles(list)
         setTotal(d.count ?? d.total ?? list.length)
       }
@@ -254,9 +254,9 @@ function AdminPayrollView() {
 
   useEffect(() => {
     fetchCycles()
-    employees.getAll({ page_size: 200 }).then((res) => {
+    employees.getAll({ skip: 0, limit: 200 }).then((res) => {
       const d = res.data
-      setEmpList(d.results ?? d.data ?? (Array.isArray(d) ? d : []))
+      setEmpList(d.items ?? d.results ?? d.data ?? (Array.isArray(d) ? d : []))
     }).catch(() => {})
   }, [fetchCycles])
 

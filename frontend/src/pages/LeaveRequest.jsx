@@ -9,6 +9,7 @@ import {
   Info,
 } from 'lucide-react'
 import { employees, leaves } from '../api.js'
+import { useAuth } from '../context/AuthContext'
 import LeaveBalanceCard from '../components/LeaveBalanceCard.jsx'
 import LoadingSpinner from '../components/LoadingSpinner.jsx'
 import toast from 'react-hot-toast'
@@ -38,6 +39,8 @@ function calcWorkingDays(from, to, holidays = []) {
 
 export default function LeaveRequest() {
   const navigate = useNavigate()
+  const { user } = useAuth()
+  const isAdmin = ['hr', 'super_admin'].includes(user?.role)
   const [empList, setEmpList] = useState([])
   const [leaveTypes, setLeaveTypes] = useState([])
   const [holidays, setHolidays] = useState([])
@@ -47,7 +50,7 @@ export default function LeaveRequest() {
   const [submitting, setSubmitting] = useState(false)
 
   const [form, setForm] = useState({
-    employee_id: 'E001',
+    employee_id: user?.id ?? '',
     leave_type_id: '',
     from_date: '',
     to_date: '',
@@ -67,21 +70,21 @@ export default function LeaveRequest() {
       setLoadingInit(true)
       try {
         const [empRes, typeRes, holRes] = await Promise.allSettled([
-          employees.getAll({ page_size: 200 }),
+          employees.getAll({ skip: 0, limit: 200 }),
           leaves.getTypes(),
           leaves.getHolidays({ year: new Date().getFullYear() }),
         ])
         if (empRes.status === 'fulfilled') {
           const d = empRes.value.data
-          setEmpList(d.results ?? d.data ?? (Array.isArray(d) ? d : []))
+          setEmpList(d.items ?? d.results ?? d.data ?? (Array.isArray(d) ? d : []))
         }
         if (typeRes.status === 'fulfilled') {
           const d = typeRes.value.data
-          setLeaveTypes(d.results ?? d.data ?? (Array.isArray(d) ? d : []))
+          setLeaveTypes(d.items ?? d.results ?? d.data ?? (Array.isArray(d) ? d : []))
         }
         if (holRes.status === 'fulfilled') {
           const d = holRes.value.data
-          setHolidays(d.results ?? d.data ?? (Array.isArray(d) ? d : []))
+          setHolidays(d.items ?? d.results ?? d.data ?? (Array.isArray(d) ? d : []))
         }
       } catch {
         toast.error('Failed to load form data')
@@ -183,12 +186,13 @@ export default function LeaveRequest() {
                 value={form.employee_id}
                 onChange={(e) => setField('employee_id', e.target.value)}
                 required
-                className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                disabled={!isAdmin}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-gray-50 disabled:text-gray-500"
               >
                 <option value="">Select employee…</option>
                 {empList.map((emp) => (
-                  <option key={emp.employee_id ?? emp.id} value={emp.employee_id ?? emp.id}>
-                    {emp.employee_id} — {emp.first_name} {emp.last_name}
+                  <option key={emp.id} value={emp.id}>
+                    {emp.employee_id} — {emp.full_name ?? [emp.first_name, emp.last_name].filter(Boolean).join(' ')}
                   </option>
                 ))}
               </select>
@@ -297,10 +301,10 @@ export default function LeaveRequest() {
               >
                 <option value="">No backfill needed</option>
                 {empList
-                  .filter((e) => (e.employee_id ?? e.id) !== form.employee_id)
+                  .filter((e) => String(e.id) !== String(form.employee_id))
                   .map((emp) => (
-                    <option key={emp.employee_id ?? emp.id} value={emp.employee_id ?? emp.id}>
-                      {emp.employee_id} — {emp.first_name} {emp.last_name}
+                    <option key={emp.id} value={emp.id}>
+                      {emp.employee_id} — {emp.full_name ?? [emp.first_name, emp.last_name].filter(Boolean).join(' ')}
                     </option>
                   ))}
               </select>

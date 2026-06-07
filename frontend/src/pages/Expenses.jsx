@@ -422,18 +422,18 @@ export default function Expenses() {
 
       if (results[0]?.status === 'fulfilled') {
         const d = results[0].value.data
-        setMyExpenses(d.results ?? d.data ?? (Array.isArray(d) ? d : []))
+        setMyExpenses(d.items ?? d.results ?? d.data ?? (Array.isArray(d) ? d : []))
       }
       if (results[1]?.status === 'fulfilled') {
         setSummary(results[1].value.data)
       }
       if (isManager && results[2]?.status === 'fulfilled') {
         const d = results[2].value.data
-        setPendingExpenses(d.results ?? d.data ?? (Array.isArray(d) ? d : []))
+        setPendingExpenses(d.items ?? d.results ?? d.data ?? (Array.isArray(d) ? d : []))
       }
       if (isHR && results[isManager ? 3 : 2]?.status === 'fulfilled') {
         const d = results[isManager ? 3 : 2].value.data
-        setAllExpenses(d.results ?? d.data ?? (Array.isArray(d) ? d : []))
+        setAllExpenses(d.items ?? d.results ?? d.data ?? (Array.isArray(d) ? d : []))
       }
     } catch {
       toast.error('Failed to load expense data')

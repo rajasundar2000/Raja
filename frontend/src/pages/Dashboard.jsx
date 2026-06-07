@@ -198,7 +198,7 @@ function AdminDashboard() {
       setError(null)
       try {
         const [empRes, leaveRes, expenseRes, cycleRes, annRes] = await Promise.allSettled([
-          employees.getAll({ page: 1, page_size: 1 }),
+          employees.getAll({ skip: 0, limit: 1 }),
           leaves.getRequests({ status: 'submitted', page_size: 10 }),
           expenseAPI.getAll({ status: 'pending', page_size: 10 }),
           payroll.getCycles({ page_size: 5 }),
@@ -211,15 +211,15 @@ function AdminDashboard() {
         }
         if (leaveRes.status === 'fulfilled') {
           const d = leaveRes.value.data
-          setPendingLeaves(d.results ?? d.data ?? (Array.isArray(d) ? d : []))
+          setPendingLeaves(d.items ?? d.results ?? d.data ?? (Array.isArray(d) ? d : []))
         }
         if (expenseRes.status === 'fulfilled') {
           const d = expenseRes.value.data
-          setPendingExpenses(d.results ?? d.data ?? (Array.isArray(d) ? d : []))
+          setPendingExpenses(d.items ?? d.results ?? d.data ?? (Array.isArray(d) ? d : []))
         }
         if (cycleRes.status === 'fulfilled') {
           const d = cycleRes.value.data
-          setPayrollCycles(d.results ?? d.data ?? (Array.isArray(d) ? d : []))
+          setPayrollCycles(d.items ?? d.results ?? d.data ?? (Array.isArray(d) ? d : []))
         }
         if (annRes.status === 'fulfilled') {
           const d = annRes.value.data
@@ -244,8 +244,9 @@ function AdminDashboard() {
   async function handleLeaveAction(leaveId, action) {
     setActionLoading((prev) => ({ ...prev, [`leave_${leaveId}`]: action }))
     try {
-      await leaves.approveRequest(leaveId, action, '')
-      toast.success(`Leave request ${action === 'approve' ? 'approved' : 'rejected'}`)
+      const backendAction = action === 'approve' ? 'approved' : 'rejected'
+      await leaves.approveRequest(leaveId, backendAction, '')
+      toast.success(`Leave request ${backendAction}`)
       setPendingLeaves((prev) => prev.filter((l) => l.id !== leaveId))
     } catch (err) {
       toast.error(err.userMessage ?? `Failed to ${action} leave`)
@@ -530,7 +531,6 @@ function EmployeeDashboard() {
   })
   const [error, setError] = useState(null)
 
-  const empId = user?.employee_id ?? 'E001'
   const firstName = user?.full_name?.split(' ')[0] ?? 'there'
 
   useEffect(() => {
@@ -539,14 +539,14 @@ function EmployeeDashboard() {
       setError(null)
       try {
         const [leaveReqRes, balRes, annRes] = await Promise.allSettled([
-          leaves.getRequests({ status: 'submitted', page_size: 5 }),
-          leaves.getBalance(empId),
+          leaves.getRequests({ employee_id: user?.id, page_size: 5 }),
+          leaves.getBalance(user?.id),
           announcementAPI.getAll(),
         ])
 
         if (leaveReqRes.status === 'fulfilled') {
           const d = leaveReqRes.value.data
-          const list = d.results ?? d.data ?? (Array.isArray(d) ? d : [])
+          const list = d.items ?? d.results ?? d.data ?? (Array.isArray(d) ? d : [])
           setRecentLeaves(list.slice(0, 5))
         }
         if (balRes.status === 'fulfilled') {
@@ -566,7 +566,7 @@ function EmployeeDashboard() {
     }
     fetchAll()
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [empId])
+  }, [user?.id])
 
   function dismissAnnouncement(id) {
     const updated = [...dismissedIds, id]
@@ -702,7 +702,7 @@ function EmployeeDashboard() {
             icon={FileText}
             label="View Salary Slip"
             gradient="linear-gradient(135deg, #7C3AED, #6D28D9)"
-            onClick={() => navigate(`/employees/${empId}`)}
+            onClick={() => navigate('/payroll')}
           />
           <QuickAction
             icon={Receipt}
