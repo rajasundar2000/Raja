@@ -1,13 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Briefcase, Eye, EyeOff, AlertCircle, Loader2, CheckCircle2, ChevronDown } from 'lucide-react'
+import { Briefcase, Eye, EyeOff, AlertCircle, Loader2, CheckCircle2 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
-
-const DEMO_CREDENTIALS = [
-  { name: 'Raj Kumar', email: 'raj.kumar@company.com', password: 'Employee@123', role: 'Manager' },
-  { name: 'Priya Singh', email: 'priya.singh@company.com', password: 'Employee@123', role: 'HR' },
-  { name: 'Amit Verma', email: 'amit.verma@company.com', password: 'Employee@123', role: 'Employee' },
-]
 
 const FEATURES = [
   'Smart leave & approval workflows',
@@ -23,7 +17,6 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const [showDemo, setShowDemo] = useState(false)
 
   async function handleSubmit(e) {
     e.preventDefault()
@@ -49,12 +42,6 @@ export default function Login() {
     }
   }
 
-  function fillCredential(cred) {
-    setEmail(cred.email)
-    setPassword(cred.password)
-    setError('')
-  }
-
   return (
     <div className="min-h-screen flex">
       {/* ── Left panel (hidden on mobile) ── */}
@@ -72,7 +59,7 @@ export default function Login() {
           </div>
 
           <h1 className="text-5xl font-black text-white mb-3 leading-tight">
-            Elite Recruit
+            Elite Recruit LLC
           </h1>
           <p className="text-lg text-indigo-300 mb-12">HR Management Portal</p>
 
@@ -99,7 +86,7 @@ export default function Login() {
               <Briefcase className="h-5 w-5 text-white" />
             </div>
             <div>
-              <p className="font-black text-slate-900">Elite Recruit</p>
+              <p className="font-black text-slate-900">Elite Recruit LLC</p>
               <p className="text-xs text-slate-500">HR Management Portal</p>
             </div>
           </div>
@@ -181,49 +168,10 @@ export default function Login() {
               </button>
             </form>
 
-            {/* Demo Credentials */}
-            <div className="mt-6">
-              <button
-                type="button"
-                onClick={() => setShowDemo((v) => !v)}
-                className="w-full flex items-center justify-between px-4 py-3 rounded-2xl bg-indigo-50/80 border border-indigo-100 text-indigo-700 hover:bg-indigo-100/80 transition-colors"
-              >
-                <span className="text-xs font-bold uppercase tracking-widest">Default Credentials</span>
-                <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${showDemo ? 'rotate-180' : ''}`} />
-              </button>
-
-              {showDemo && (
-                <div className="mt-2 rounded-2xl bg-indigo-50/80 border border-indigo-100 overflow-hidden">
-                  {DEMO_CREDENTIALS.map((cred) => (
-                    <button
-                      key={cred.email}
-                      type="button"
-                      onClick={() => fillCredential(cred)}
-                      disabled={loading}
-                      className="w-full text-left px-4 py-3 hover:bg-indigo-100/80 transition-colors disabled:opacity-50 border-b border-indigo-100/60 last:border-0 flex items-center justify-between group"
-                    >
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <div className="h-6 w-6 rounded-full bg-gradient-to-br from-indigo-500 to-violet-500 flex items-center justify-center text-white text-xs font-bold">
-                            {cred.name[0]}
-                          </div>
-                          <p className="text-sm font-semibold text-indigo-900">{cred.name}</p>
-                          <span className="text-xs bg-indigo-200 text-indigo-700 rounded-full px-2 py-0.5">{cred.role}</span>
-                        </div>
-                        <p className="text-xs text-indigo-600 mt-0.5 ml-8">{cred.email}</p>
-                      </div>
-                      <span className="text-xs text-indigo-300 group-hover:text-indigo-600 font-mono text-right flex-shrink-0 ml-2">
-                        Click to fill
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
           </div>
 
           <p className="text-center text-slate-400 text-xs mt-6">
-            Elite Recruit © {new Date().getFullYear()} — Secure HR Platform
+            Elite Recruit LLC © {new Date().getFullYear()} — Secure HR Platform
           </p>
         </div>
       </div>
