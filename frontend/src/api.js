@@ -37,7 +37,7 @@ export const employees = {
   getAll: (params) => api.get('/employees', { params }),
   getOne: (id) => api.get(`/employees/${id}`),
   create: (data) => api.post('/employees', data),
-  update: (id, data) => api.patch(`/employees/${id}`, data),
+  update: (id, data) => api.put(`/employees/${id}`, data),
   getSalaryStructure: (id) => api.get(`/employees/${id}/salary-structure`),
   setSalaryStructure: (id, data) => api.post(`/employees/${id}/salary-structure`, data),
 }

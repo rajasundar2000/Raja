@@ -145,7 +145,10 @@ export default function EmployeeList() {
     }
     setSaving(true)
     try {
-      const payload = { ...form }
+      // Strip empty strings so optional date/string fields are omitted (not sent as "")
+      const payload = Object.fromEntries(
+        Object.entries(form).filter(([, v]) => v !== '')
+      )
       if (!payload.state) payload.state = 'Karnataka'
       await employees.create(payload)
       toast.success('Employee created successfully!')
